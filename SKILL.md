@@ -47,6 +47,122 @@ Run this ONLY when user types `/vorth init` AND `.vorth/` does NOT already exist
 
 If `.vorth/` already exists: announce "Vorth is already initialized. Use `/vorth status` to check the current config."
 
+### Phase 0 — Environment Validation & Auto-Setup
+
+**This phase runs before anything else and may block init if the environment is incomplete.**
+
+Run all checks silently. Collect results into a status list. Only announce at the end of this phase.
+
+---
+
+**A. ECC** *(global — installed once in Antigravity user config)*
+
+Check if ECC is accessible by verifying the presence of its directory in the Antigravity workspace or user config path:
+- Look for an `ECC` folder containing agent/skill definitions (agents with names like `code-reviewer`, `security-reviewer`, `tdd-guide`, `architect`, `build-error-resolver`)
+- Check common paths: `~/.gemini/config/skills/ecc/`, or any workspace directory Antigravity loads skills from
+
+Result:
+- Found → `ECC: OK`
+- Not found → `ECC: MISSING`
+  - Install command: `git clone https://github.com/affaan-m/ECC <your-antigravity-workspace>/ECC`
+  - After cloning: restart Antigravity so the new skills are loaded
+
+---
+
+**B. Superpowers** *(global — installed once in Antigravity user config)*
+
+Check if Superpowers skills are accessible:
+- Look for a `superpowers` directory or individual skill files named: `brainstorming`, `writing-plans`, `systematic-debugging`, `subagent-driven-development`, `test-driven-development`, `verification-before-completion`, `requesting-code-review`, `executing-plans`
+- Check common paths: `~/.gemini/config/skills/superpowers/`, or any workspace directory Antigravity loads from
+
+Result:
+- Found → `SUPERPOWERS: OK`
+- Not found → `SUPERPOWERS: MISSING`
+  - Install command: `git clone https://github.com/obra/superpowers <your-antigravity-workspace>/superpowers`
+  - After cloning: restart Antigravity
+
+---
+
+**C. Layers** *(global — installed once in Antigravity user config)*
+
+Check if Layers skills are accessible:
+- Look for a `layers-skills` directory or skill files named: `layers-orient`, `layers-user-needs`, `layers-interaction-flow`, `layers-domain`
+- Check common paths: `~/.gemini/config/skills/layers-skills/`, or any workspace directory Antigravity loads from
+
+Result:
+- Found → `LAYERS: OK`
+- Not found → `LAYERS: MISSING`
+  - Install command: `git clone https://github.com/jamiemill/layers-skills <your-antigravity-workspace>/layers-skills`
+  - After cloning: restart Antigravity
+
+---
+
+**D. CodeGraph** *(MCP global + per-project index)*
+
+Step 1 — verify CLI is installed:
+- Run `codegraph --version`
+- If not found → `CODEGRAPH_CLI: MISSING`
+  - Install (Windows PowerShell): `irm https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.ps1 | iex`
+  - Install (macOS/Linux): `curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh`
+  - After install: open a new terminal (PATH update requires new shell), then re-run `/vorth init`
+- If found → proceed to Step 2
+
+Step 2 — initialize per-project index:
+- Does `.codegraph/` exist in the project root?
+  - YES → call `codegraph_status` to verify health → `CODEGRAPH_INDEX: OK`
+  - NO → run `codegraph init -i` in the project root
+    - Succeeded → `CODEGRAPH_INDEX: INITIALIZED`
+    - Failed → `CODEGRAPH_INDEX: FAILED` (note the error output for the announcement)
+
+---
+
+**E. Impeccable** *(per-project — only if UI layer is detected)*
+
+*Skip entirely if project has no UI layer (backend-only, api-only, prototype with no UI).*
+
+Check if Impeccable is installed for this project:
+- Look for `.agents/skills/impeccable/` or `.gemini/skills/impeccable/` in the project root
+- If found → `IMPECCABLE: OK`
+- If NOT found → run the install command in the project root:
+  ```
+  npx impeccable skills install
+  ```
+  - Succeeded → `IMPECCABLE: INITIALIZED`
+  - Failed (npx not available, or install errors) → `IMPECCABLE: FAILED` (note the error)
+  - Alternative if npx fails: `git submodule add https://github.com/pbakaus/impeccable .impeccable` then `npx impeccable skills link --source=.impeccable --providers=gemini`
+
+---
+
+**Environment Gate — decision after all checks:**
+
+Collect all results. Then:
+
+**IF any stack shows `MISSING` or `FAILED`:**
+
+```
+⚠ Vorth Environment Incomplete — initialization blocked
+
+Vorth requires the full stack to be present before initializing a project.
+Partial environments lead to degraded or broken agent behavior — Vorth will not proceed.
+
+Status:
+  [✓/✗] ECC          [OK / MISSING — install: git clone https://github.com/affaan-m/ECC]
+  [✓/✗] Superpowers  [OK / MISSING — install: git clone https://github.com/obra/superpowers]
+  [✓/✗] Layers       [OK / MISSING — install: git clone https://github.com/jamiemill/layers-skills]
+  [✓/✗] CodeGraph    [OK / MISSING CLI — install: irm ...install.ps1 | iex (Windows)]
+  [✓/✗] Impeccable   [OK / FAILED — run: npx impeccable skills install]
+
+Fix the issues above, then restart Antigravity if needed, and run /vorth init again.
+```
+
+STOP. Do not proceed to Phase 1 until all checks are OK or INITIALIZED.
+
+**IF all stacks are OK or INITIALIZED:**
+- Proceed silently to Phase 1
+- Any `INITIALIZED` items will be reported in the final announcement (Phase 4)
+
+---
+
 ### Phase 1 — Auto-detect from codebase
 
 Before asking the user anything, read the following (silently, do not announce each step):
@@ -163,17 +279,17 @@ Last updated: [ISO date]
 
 ---
 
-### Phase 4 — CodeGraph check
-
-After writing the files, check if `.codegraph/` already exists in the project root:
-
-- **YES** → Set `codegraph_active: yes` in vorth.config.md. Call `codegraph_status` to verify.
-- **NO** → Set `codegraph_active: no` in vorth.config.md. Inform the user during the announcement.
-
-### Phase 5 — Announce completion
+### Phase 4 — Announce completion
 
 ```
 ✓ Vorth initialized for [project_name]
+
+Environment:
+  ✓ ECC          — specialist agents active
+  ✓ Superpowers  — planning & execution methodology active
+  ✓ Layers       — design thinking active (triggers on UX ambiguity)
+  ✓ CodeGraph    — [OK (existing index) / INITIALIZED (new index built)]
+  [✓/—] Impeccable — [INITIALIZED (auto-installed) / inactive (no UI layer)]
 
 Files created:
   GEMINI.md              ← activates Vorth automatically in all future sessions
@@ -183,13 +299,10 @@ Files created:
   docs/vorth/plans/      ← implementation plans will be saved here
 
 Configuration:
-  Type: [type]
+  Type:  [type]
   Stack: [stack]
-  UI layer: [yes/no]
-  Impeccable: [active/inactive — and why]
-  Layers: activates automatically when UX ambiguity is detected
-  CodeGraph: [✓ indexed — semantic code intelligence active
-             / ✗ not initialized — run `codegraph init -i` in this project to activate]
+  UI:    [yes/no]
+  Register: [brand/product/n/a]
 
 You're ready. Describe what you want to build or fix, and Vorth handles the rest.
 
