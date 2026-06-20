@@ -64,8 +64,15 @@ Check if ECC is accessible by verifying the presence of its directory in the Ant
 Result:
 - Found → `ECC: OK`
 - Not found → `ECC: MISSING`
-  - Install command: `git clone https://github.com/affaan-m/ECC <your-antigravity-workspace>/ECC`
-  - After cloning: restart Antigravity so the new skills are loaded
+  - Install (clone then run the installer):
+    ```powershell
+    git clone https://github.com/affaan-m/ECC <your-antigravity-workspace>/ECC
+    cd <your-antigravity-workspace>/ECC
+    .\install.ps1        # Windows
+    # ./install.sh       # macOS/Linux
+    ```
+  - The installer detects your harness and wires the correct skills/agents automatically
+  - Restart Antigravity after install
 
 ---
 
@@ -78,8 +85,12 @@ Check if Superpowers skills are accessible:
 Result:
 - Found → `SUPERPOWERS: OK`
 - Not found → `SUPERPOWERS: MISSING`
-  - Install command: `git clone https://github.com/obra/superpowers <your-antigravity-workspace>/superpowers`
-  - After cloning: restart Antigravity
+  - Install via Gemini CLI extension system:
+    ```bash
+    gemini extensions install https://github.com/obra/superpowers
+    ```
+  - To update later: `gemini extensions update superpowers`
+  - Restart Antigravity after install
 
 ---
 
@@ -92,8 +103,11 @@ Check if Layers skills are accessible:
 Result:
 - Found → `LAYERS: OK`
 - Not found → `LAYERS: MISSING`
-  - Install command: `git clone https://github.com/jamiemill/layers-skills <your-antigravity-workspace>/layers-skills`
-  - After cloning: restart Antigravity
+  - Clone directly into the Antigravity workspace (no special installer needed):
+    ```bash
+    git clone https://github.com/jamiemill/layers-skills <your-antigravity-workspace>/layers-skills
+    ```
+  - Restart Antigravity after cloning
 
 ---
 
@@ -146,11 +160,11 @@ Vorth requires the full stack to be present before initializing a project.
 Partial environments lead to degraded or broken agent behavior — Vorth will not proceed.
 
 Status:
-  [✓/✗] ECC          [OK / MISSING — install: git clone https://github.com/affaan-m/ECC]
-  [✓/✗] Superpowers  [OK / MISSING — install: git clone https://github.com/obra/superpowers]
-  [✓/✗] Layers       [OK / MISSING — install: git clone https://github.com/jamiemill/layers-skills]
-  [✓/✗] CodeGraph    [OK / MISSING CLI — install: irm ...install.ps1 | iex (Windows)]
-  [✓/✗] Impeccable   [OK / FAILED — run: npx impeccable skills install]
+  [✓/✗] ECC          [OK / MISSING — clone repo then run .\install.ps1]
+  [✓/✗] Superpowers  [OK / MISSING — gemini extensions install https://github.com/obra/superpowers]
+  [✓/✗] Layers       [OK / MISSING — git clone https://github.com/jamiemill/layers-skills <workspace>/layers-skills]
+  [✓/✗] CodeGraph    [OK / MISSING CLI — irm .../install.ps1 | iex (Windows)]
+  [✓/✗] Impeccable   [OK / FAILED — npx impeccable skills install]
 
 Fix the issues above, then restart Antigravity if needed, and run /vorth init again.
 ```
