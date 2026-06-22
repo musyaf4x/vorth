@@ -2,6 +2,8 @@
 
 Superpowers owns process. ECC owns specialist review and targeted expertise.
 CodeGraph owns codebase-intelligence routing before broad exploration.
+Impeccable owns frontend/UI quality gates.
+Layers owns product/UX decision discovery.
 
 ## Workflow
 
@@ -16,6 +18,16 @@ CodeGraph owns codebase-intelligence routing before broad exploration.
 - Before reading many files, query CodeGraph first.
 - For small changes with a clear file or symbol, skip CodeGraph.
 - If CodeGraph is unavailable, fall back to narrow `rg` and targeted file reads.
+
+## Impeccable Routing
+
+- Use Impeccable for frontend/UI creation, critique, audit, polish, harden, layout, responsive behavior, accessibility, and design-system fit.
+- Skip Impeccable for backend-only or obvious one-line UI work.
+
+## Layers Routing
+
+- Use Layers before implementation when product/UX intent, conceptual model, or interaction flow is unclear.
+- Skip Layers when the engineering task and target behavior are already clear.
 
 ## ECC Specialist Routing
 
@@ -41,4 +53,5 @@ Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 - Do not invoke every ECC specialist by default.
 - Do not let ECC replace Superpowers as the process controller.
 - Do not let CodeGraph replace Superpowers or ECC.
-- Do not use Layers or Impeccable until Vorth explicitly enables them.
+- Do not let Impeccable replace Layers for product decisions.
+- Do not let Layers become a ritual for every engineering task.

@@ -23,5 +23,14 @@ codegraph_scope: project-local
 codegraph_index: .codegraph
 codegraph_policy: broad-exploration-first
 
-deferred_stacks: layers, impeccable
+impeccable: {{IMPECCABLE}}
+impeccable_scope: project-local
+impeccable_policy: frontend-quality-gate
+
+layers: {{LAYERS}}
+layers_scope: project-local
+layers_policy: product-decision-gate
+
+conditional_stacks: impeccable, layers
+deferred_stacks: none
 created_by: vorth-cli

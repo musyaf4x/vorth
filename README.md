@@ -2,14 +2,16 @@
 
 Vorth is a project-local engineering harness for Antigravity and Codex.
 
-Current focus: **Superpowers + CodeGraph + ECC**.
+Current focus: **Superpowers + CodeGraph + ECC + conditional Impeccable/Layers**.
 
 - **Superpowers** is the baseline workflow: clarify, plan, TDD, execute, review, verify.
 - **CodeGraph** is the codebase intelligence layer: query it before broad exploration or reading many files.
 - **ECC** is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
+- **Impeccable** is the frontend/UI quality gate when a task touches visible product experience.
+- **Layers** is the product/UX decision-discovery gate when intent, flow, or conceptual model is unclear.
 - **Agy Native Bridge** is an optional Antigravity-only execution adapter for bounded tasks through Antigravity's own OAuth/session, not a Gemini API key.
 
-Layers and Impeccable are intentionally deferred until the Superpowers/CodeGraph/ECC foundation is stable.
+Impeccable and Layers are conditional stacks, not always-on rituals.
 
 ## Why This Shape
 
@@ -20,6 +22,8 @@ Vorth = project-local activation and memory
 Superpowers = process controller
 CodeGraph = codebase intelligence layer
 ECC = specialist engineering pool
+Impeccable = frontend/UI quality gate
+Layers = product/UX decision-discovery gate
 Agy Native Bridge = bounded Antigravity execution adapter
 Antigravity/Codex = harness adapters
 ```
@@ -37,8 +41,8 @@ Vorth stays opt-in per repository. A repository becomes Vorth-enabled only after
 The executable equivalent is:
 
 ```powershell
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled --codegraph enabled
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled --codegraph enabled --impeccable auto --layers advisory
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory
 ```
 
 Init writes project-local activation files:
@@ -48,7 +52,10 @@ Init writes project-local activation files:
   vorth.config.md
   context.md
   instructions/
+    stack-routing.md
     codegraph.md
+    impeccable.md
+    layers.md
     superpowers-ecc.md
     turn-process.md
   plans/
@@ -58,7 +65,7 @@ GEMINI.md   # Antigravity adapter block
 AGENTS.md   # Codex adapter block
 ```
 
-`GEMINI.md` and `AGENTS.md` contain managed `VORTH:START` / `VORTH:END` blocks that tell the agent to read `.vorth/context.md`, follow `.vorth/instructions/superpowers-ecc.md`, and apply `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
+`GEMINI.md` and `AGENTS.md` contain managed `VORTH:START` / `VORTH:END` blocks that tell the agent to read `.vorth/context.md`, follow `.vorth/instructions/stack-routing.md`, and then apply only the stack instructions relevant to the task.
 
 ## CodeGraph
 
@@ -86,6 +93,46 @@ The operating rule is:
 - If CodeGraph is unavailable or stale, fall back to narrow `rg` and targeted file reads.
 
 CodeGraph telemetry follows its official policy. See [TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md) for opt-out options.
+
+## Impeccable
+
+Vorth treats [Impeccable](https://github.com/pbakaus/impeccable) as the frontend/UI quality gate. It is conditional: Vorth routes to it only when work touches visible product experience.
+
+Default mode is:
+
+```yaml
+impeccable: auto
+```
+
+In `auto`, Vorth detects frontend evidence and installed Impeccable assets, then reports whether Impeccable is recommended. It does not run network installers automatically.
+
+When the user explicitly selects `--impeccable enabled`, Vorth uses Impeccable's official installer path:
+
+```powershell
+npx --yes impeccable install --providers=gemini,codex --scope=project
+```
+
+Use Impeccable for UI creation, critique, audit, polish, harden, layout, accessibility, responsive behavior, empty states, onboarding, copy, and design-system fit. Skip it for backend-only work or obvious low-risk changes.
+
+## Layers
+
+Vorth treats [Layers Skills](https://github.com/jamiemill/layers-skills) as a product/UX decision-discovery gate. It is advisory by default because most software engineering work should not pay a product-framing tax.
+
+Default mode is:
+
+```yaml
+layers: advisory
+```
+
+In `advisory`, Vorth writes product/UX routing rules but does not vendor the Layers skill repository.
+
+When the user explicitly selects `--layers enabled`, Vorth vendors the official skills project-local:
+
+```powershell
+git clone https://github.com/jamiemill/layers-skills.git .vorth/vendor/layers-skills
+```
+
+Use Layers when audience, user need, domain model, product strategy, conceptual model, interaction flow, or surface direction is unclear. Skip it when the engineering behavior and files are already clear.
 
 ## Native vs Project-Local
 
@@ -195,6 +242,8 @@ The worker profile must be logged in once interactively before it can serve nati
 | Superpowers | Baseline workflow | Every non-trivial Vorth task. |
 | CodeGraph | Codebase intelligence layer | Before broad codebase exploration, file discovery, relationship tracing, and many-file reads. |
 | ECC | Specialist layer | Planning complexity, TDD support, code review, security, build failures, language-specific risks. |
+| Impeccable | Frontend/UI quality gate | UI creation, critique, audit, polish, harden, layout, accessibility, and responsive behavior. |
+| Layers | Product/UX decision gate | Ambiguous product intent, domain, user needs, conceptual model, interaction flow, or surface direction. |
 | Agy Native Bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
 
 ## Specialist Routing
@@ -219,12 +268,12 @@ The worker profile must be logged in once interactively before it can serve nati
 The project-local CLI implements the same flows:
 
 ```powershell
-node bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled
+node bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory
 node bin\vorth.mjs status --repo <repo>
 node bin\vorth.mjs reset --repo <repo> --confirm
 ```
 
-`status` detects project bridge files, CodeGraph CLI/index state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
+`status` detects project bridge files, CodeGraph CLI/index state, Impeccable assets, Layers vendor state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
 
 ## Operating Rule
 
@@ -233,6 +282,10 @@ Superpowers decides **when** work happens.
 CodeGraph decides **where to look first** when the codebase area is not already clear.
 
 ECC decides **who** should review or assist specialist work.
+
+Impeccable decides **how to improve visible UI quality** once product direction is clear.
+
+Layers decides **what product/UX questions must be answered** before UI/code when intent is unclear.
 
 The Agy Native Bridge decides nothing. It only executes bounded tasks that the main Agy agent delegates.
 

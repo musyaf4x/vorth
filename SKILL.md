@@ -1,17 +1,19 @@
 ---
 name: vorth
-description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow, CodeGraph as the codebase intelligence layer, and ECC as the specialist engineering layer, with an optional Antigravity-only native OAuth MCP bridge for bounded Gemini 3.5 Flash High execution, while keeping Layers and Impeccable disabled until explicitly added later.
+description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow, CodeGraph as the codebase intelligence layer, ECC as the specialist engineering layer, Impeccable as a conditional frontend/UI quality gate, and Layers as an advisory product/UX decision gate, with an optional Antigravity-only native OAuth MCP bridge for bounded Gemini 3.5 Flash High execution.
 ---
 
 # Vorth Engineering Harness
 
-Vorth is a project-local harness for Antigravity and Codex. This version focuses on three active stacks:
+Vorth is a project-local harness for Antigravity and Codex. This version focuses on routed stack participation:
 
 - Superpowers is the baseline workflow: clarify, brainstorm when needed, plan, TDD, execute, review, verify, finish.
 - CodeGraph is the codebase intelligence layer: query it before broad codebase exploration or reading many files.
 - ECC is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
+- Impeccable is the frontend/UI quality gate when the task touches visible product experience.
+- Layers is the product/UX decision-discovery gate when product intent, conceptual model, or interaction flow is unclear.
 
-Layers and Impeccable are intentionally deferred. Do not activate, configure, or mention them as active Vorth stacks unless a later Vorth version explicitly re-enables them.
+Impeccable and Layers are conditional. Do not run them as a ritual for every task.
 
 ## Core Contract
 
@@ -21,8 +23,10 @@ Use this hierarchy:
 2. Superpowers controls the process flow.
 3. CodeGraph narrows codebase exploration before broad file reads.
 4. ECC supplies specialists at specific quality gates.
-5. The optional Agy Native Bridge executes only bounded Antigravity tasks after routing is already decided.
-6. The user's explicit instruction always wins over Vorth, Superpowers, CodeGraph, ECC, and model routing.
+5. Impeccable supplies frontend/UI quality gates when UI is involved.
+6. Layers clarifies product/UX decisions when intent is unclear.
+7. The optional Agy Native Bridge executes only bounded Antigravity tasks after routing is already decided.
+8. The user's explicit instruction always wins over Vorth, Superpowers, CodeGraph, ECC, Impeccable, Layers, and model routing.
 
 Short form:
 
@@ -31,6 +35,8 @@ Vorth = project-local activation and memory
 Superpowers = workflow baseline
 CodeGraph = codebase intelligence layer
 ECC = specialist pool
+Impeccable = frontend/UI quality gate
+Layers = product/UX decision-discovery gate
 Agy Native Bridge = optional bounded execution adapter
 Antigravity/Codex = harness adapters
 ```
@@ -43,9 +49,12 @@ Run this check before any planning, coding, debugging, review, or status respons
 2. If `GEMINI.md` or `AGENTS.md` contains a managed `VORTH:START` block, Vorth is active.
 3. If Vorth is active:
    - Read `.vorth/context.md` if present.
+   - Read `.vorth/instructions/stack-routing.md` if present.
    - Read `.vorth/instructions/superpowers-ecc.md` if present.
    - Read `.vorth/instructions/codegraph.md` if present and `.vorth/vorth.config.md` does not disable CodeGraph.
-   - Announce one compact line: `Vorth active: Superpowers baseline, CodeGraph [enabled/disabled/degraded], ECC specialists, mode [full/native/project-local/degraded], Agy native bridge [enabled/disabled]`.
+   - Read `.vorth/instructions/impeccable.md` when the task touches frontend/UI work.
+   - Read `.vorth/instructions/layers.md` when product/UX decisions are unclear.
+   - Announce one compact line: `Vorth active: Superpowers baseline, CodeGraph [enabled/disabled/degraded], ECC specialists, Impeccable [auto/enabled/disabled], Layers [advisory/enabled/disabled], mode [project-local/degraded], Agy native bridge [enabled/disabled]`.
    - Continue with the Vorth workflow below.
 4. If Vorth is not active and the user did not type `/vorth init`, do not apply Vorth. Answer normally.
 5. If the user typed `/vorth init`, run the init flow.
@@ -98,7 +107,7 @@ If a message starts with `/vorth` but is not one of these commands, explain the 
 The executable implementation is:
 
 ```powershell
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory
 node <vorth-skill>\bin\vorth.mjs status --repo <repo>
 node <vorth-skill>\bin\vorth.mjs reset --repo <repo> --confirm
 ```
@@ -142,6 +151,14 @@ codegraph: enabled, disabled, or skipped
 codegraph_scope: project-local
 codegraph_index: .codegraph
 codegraph_policy: broad-exploration-first
+impeccable: auto, enabled, disabled, or skipped
+impeccable_scope: project-local
+impeccable_policy: frontend-quality-gate
+layers: advisory, enabled, disabled, or skipped
+layers_scope: project-local
+layers_policy: product-decision-gate
+conditional_stacks: impeccable, layers
+deferred_stacks: none
 ```
 
 Keep `codex_flash_high_executor` disabled. The bridge is only for Antigravity.
@@ -223,7 +240,41 @@ Behavior rule when active:
 - For small changes where the file or symbol is already clear, skip CodeGraph.
 - If CodeGraph is unavailable, stale, or not registered as a tool, say the graph layer is degraded and fall back to narrow `rg` and targeted file reads.
 
-### Phase 5: Agy Native Bridge
+### Phase 5: Impeccable Availability
+
+Default mode is `impeccable: auto`.
+
+1. Detect whether the repo has frontend/UI evidence.
+2. Detect official Impeccable-generated assets when present:
+   - `.agents/skills/impeccable/SKILL.md`
+   - `.gemini/skills/impeccable/SKILL.md`
+   - `.codex/hooks.json` containing `impeccable`
+   - `PRODUCT.md` and `DESIGN.md`
+3. In `auto`, do not run network installers. Report `recommended` when frontend evidence exists but Impeccable is missing.
+4. In `enabled`, run the official installer from the target repo root:
+
+```powershell
+npx --yes impeccable install --providers=gemini,codex --scope=project
+```
+
+5. Do not copy Impeccable internals by hand. Respect its official installer output.
+6. Route to Impeccable only for frontend/UI work.
+
+### Phase 6: Layers Availability
+
+Default mode is `layers: advisory`.
+
+1. In `advisory`, write Vorth's product/UX routing policy only.
+2. In `enabled`, vendor the official repository project-local:
+
+```powershell
+git clone https://github.com/jamiemill/layers-skills.git .vorth/vendor/layers-skills
+```
+
+3. Detect at least `layers-intro`, `layers-orient`, and `layers-conceptual-model` when vendored.
+4. Route to Layers only when product/UX intent, domain model, user needs, conceptual model, interaction flow, or surface direction is unclear.
+
+### Phase 7: Agy Native Bridge
 
 Run this phase only when the user explicitly approves the Agy-only bridge for the target project. Do not configure it for Codex.
 
@@ -275,7 +326,7 @@ Forbidden bridge tasks:
 - Large refactor without a written plan.
 - Any Codex workflow.
 
-### Phase 6: Write Vorth Project Files
+### Phase 8: Write Vorth Project Files
 
 Create or update these files. Preserve user content. Use managed blocks for existing `GEMINI.md` and `AGENTS.md`.
 
@@ -284,7 +335,10 @@ Create or update these files. Preserve user content. Use managed blocks for exis
   vorth.config.md
   context.md
   instructions/
+    stack-routing.md
     codegraph.md
+    impeccable.md
+    layers.md
     superpowers-ecc.md
     turn-process.md
   plans/
@@ -304,11 +358,11 @@ This repository has opted into Vorth.
 
 Before planning, coding, debugging, reviewing, or committing in this repo:
 1. Read `.vorth/context.md`.
-2. Follow `.vorth/instructions/superpowers-ecc.md`.
-3. Follow `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
-4. Use Superpowers as the baseline workflow.
-5. Use CodeGraph before broad codebase exploration or reading many files.
-6. Use ECC only as the specialist layer.
+2. Follow `.vorth/instructions/stack-routing.md`.
+3. Follow `.vorth/instructions/superpowers-ecc.md`.
+4. Follow `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
+5. Follow `.vorth/instructions/impeccable.md` for frontend/UI work.
+6. Follow `.vorth/instructions/layers.md` when product/UX decisions are unclear.
 7. Update `.vorth/context.md` after meaningful work.
 8. If `.vorth/vorth.config.md` enables the Agy Native Bridge, use it only for bounded execution tasks.
 <!-- VORTH:END -->
@@ -324,11 +378,11 @@ This repository has opted into Vorth.
 
 Before planning, coding, debugging, reviewing, or committing in this repo:
 1. Read `.vorth/context.md`.
-2. Follow `.vorth/instructions/superpowers-ecc.md`.
-3. Follow `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
-4. Use Superpowers as the baseline workflow.
-5. Use CodeGraph before broad codebase exploration or reading many files.
-6. Use ECC only as the specialist layer.
+2. Follow `.vorth/instructions/stack-routing.md`.
+3. Follow `.vorth/instructions/superpowers-ecc.md`.
+4. Follow `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
+5. Follow `.vorth/instructions/impeccable.md` for frontend/UI work.
+6. Follow `.vorth/instructions/layers.md` when product/UX decisions are unclear.
 7. Update `.vorth/context.md` after meaningful work.
 
 Codex loads AGENTS.md at session start. After `/vorth init`, restart Codex or open a new thread for automatic activation.
@@ -344,6 +398,8 @@ The Agy Native Bridge is Antigravity-only. Codex must ignore it.
 
 Superpowers owns process. ECC owns specialist review and targeted expertise.
 CodeGraph owns codebase-intelligence routing before broad exploration.
+Impeccable owns frontend/UI quality gates.
+Layers owns product/UX decision discovery.
 
 ## Workflow
 
@@ -358,6 +414,16 @@ CodeGraph owns codebase-intelligence routing before broad exploration.
 - Before reading many files, query CodeGraph first.
 - For small changes with a clear file or symbol, skip CodeGraph.
 - If CodeGraph is unavailable, fall back to narrow `rg` and targeted file reads.
+
+## Impeccable Routing
+
+- Use Impeccable for frontend/UI creation, critique, audit, polish, harden, layout, responsive behavior, accessibility, and design-system fit.
+- Skip Impeccable for backend-only or obvious one-line UI work.
+
+## Layers Routing
+
+- Use Layers before implementation when product/UX intent, conceptual model, or interaction flow is unclear.
+- Skip Layers when the engineering task and target behavior are already clear.
 
 ## ECC Specialist Routing
 
@@ -383,10 +449,11 @@ Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 - Do not invoke every ECC specialist by default.
 - Do not let ECC replace Superpowers as the process controller.
 - Do not let CodeGraph replace Superpowers or ECC.
-- Do not use Layers or Impeccable until Vorth explicitly enables them.
+- Do not let Impeccable replace Layers for product decisions.
+- Do not let Layers become a ritual for every engineering task.
 ```
 
-### Phase 7: Announce Result
+### Phase 9: Announce Result
 
 Report:
 
@@ -399,6 +466,10 @@ ECC Codex: [installed/missing/skipped]
 CodeGraph: [enabled/disabled/skipped]
 CodeGraph CLI: [detected/missing/error]
 CodeGraph index: [present/missing]
+Impeccable: [auto/enabled/disabled/skipped]
+Impeccable install: [installed/recommended/not_required/missing/skipped]
+Layers: [advisory/enabled/disabled/skipped]
+Layers install: [advisory/vendored/missing/skipped]
 Agy Native Bridge: [enabled/disabled/skipped]
 Activation: GEMINI.md + AGENTS.md managed blocks
 Next: restart/open a new Agy or Codex session in this repo
@@ -416,10 +487,13 @@ For `/vorth status`, inspect and report:
 - ECC Antigravity availability: `.agent/ecc-install-state.json` and `.agent/skills`.
 - ECC Codex availability: current Codex skills/agents if visible, or config value if not.
 - CodeGraph availability: config state, CLI availability, `.codegraph/` index, and MCP registration if readable.
+- Impeccable availability: config state, frontend detection, installed assets, `PRODUCT.md`, and `DESIGN.md`.
+- Layers availability: config state, vendor checkout, and core Layers skill files.
 - Agy Native Bridge availability: `.vorth/mcp/vorth-agy-native-bridge`, config flag, MCP registration, and `vorth_agy_status` if available.
 - The CLI status command must inspect user-level MCP config read-only and print a suggested registration snippet when missing.
 - Current `.vorth/context.md` summary.
-- Deferred stacks: Layers and Impeccable, always shown as disabled in this version.
+- Conditional stacks: Impeccable and Layers.
+- Deferred stacks: none.
 
 ## Reset Flow
 
@@ -427,7 +501,7 @@ For `/vorth reset`:
 
 1. Ask for confirmation.
 2. Remove only `.vorth/` and the Vorth managed blocks in `GEMINI.md` and `AGENTS.md`.
-3. Do not uninstall ECC, Superpowers, `.agent/`, `.agents/`, or `.codex/` automatically. Those may be owned by their official installers or the user.
+3. Do not uninstall ECC, Superpowers, Impeccable, `.agent/`, `.agents/`, `.codex/`, `.gemini/`, `PRODUCT.md`, `DESIGN.md`, or `.codegraph/` automatically. Those may be owned by their official installers or the user.
 4. If the user wants stack uninstall, point them to each stack's official uninstall/disable path.
 5. Do not remove user-level MCP registrations automatically. If Vorth added one, show the exact entry and ask before changing it.
 
@@ -454,21 +528,25 @@ For `/vorth reset`:
 ### Feature or Refactor
 
 1. Use Superpowers brainstorming when requirements are unclear.
-2. Use CodeGraph before broad codebase exploration or reading many files.
-3. Use Superpowers writing-plans for multi-step work.
-4. Ask for approval before executing a non-trivial plan.
-5. Execute with TDD.
-6. Use ECC specialists only at relevant gates.
-7. Verify and update context.
+2. Use Layers first if product/UX intent is unclear.
+3. Use CodeGraph before broad codebase exploration or reading many files.
+4. Use Superpowers writing-plans for multi-step work.
+5. Ask for approval before executing a non-trivial plan.
+6. Execute with TDD.
+7. Use Impeccable if the feature touches frontend/UI.
+8. Use ECC specialists only at relevant gates.
+9. Verify and update context.
 
 ## Non-Negotiables
 
 - Vorth is opt-in per repository.
 - Do not silently install global/native plugins. Ask first and explain scope.
 - Prefer official ECC and Superpowers installers/plugins over copied snippets.
-- Keep Superpowers as baseline, CodeGraph as codebase intelligence, and ECC as specialist layer.
+- Prefer official Impeccable installer and official Layers repository over copied snippets.
+- Keep Superpowers as baseline, CodeGraph as codebase intelligence, ECC as specialist layer, Impeccable as UI quality gate, and Layers as product/UX decision gate.
 - Use CodeGraph before broad exploration or many-file reads, but skip it for obvious one-file changes.
-- Do not activate Layers or Impeccable in this version.
+- Use Impeccable only for frontend/UI quality work.
+- Use Layers only when product/UX decisions are unclear.
 - Preserve user files and unrelated changes.
 - Keep `.vorth/context.md` concise and current.
 - Keep the Agy Native Bridge Antigravity-only and task-specific.
