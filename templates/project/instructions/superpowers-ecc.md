@@ -1,6 +1,7 @@
 # Vorth Superpowers + ECC Contract
 
 Superpowers owns process. ECC owns specialist review and targeted expertise.
+CodeGraph owns codebase-intelligence routing before broad exploration.
 
 ## Workflow
 
@@ -8,6 +9,13 @@ Superpowers owns process. ECC owns specialist review and targeted expertise.
 - Bug or failing test: use systematic debugging, identify root cause, write/verify failing test, fix, review changed files.
 - Non-trivial feature/refactor: brainstorm or clarify, write a plan, get approval, execute with TDD, review, verify.
 - Large independent plan: use Superpowers subagent-driven-development when available.
+
+## CodeGraph Routing
+
+- Before broad codebase exploration, query CodeGraph first.
+- Before reading many files, query CodeGraph first.
+- For small changes with a clear file or symbol, skip CodeGraph.
+- If CodeGraph is unavailable, fall back to narrow `rg` and targeted file reads.
 
 ## ECC Specialist Routing
 
@@ -32,4 +40,5 @@ Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 
 - Do not invoke every ECC specialist by default.
 - Do not let ECC replace Superpowers as the process controller.
-- Do not use deferred stacks until Vorth explicitly enables them.
+- Do not let CodeGraph replace Superpowers or ECC.
+- Do not use Layers or Impeccable until Vorth explicitly enables them.

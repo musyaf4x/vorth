@@ -2,13 +2,14 @@
 
 Vorth is a project-local engineering harness for Antigravity and Codex.
 
-Current focus: **Superpowers + ECC only**.
+Current focus: **Superpowers + CodeGraph + ECC**.
 
 - **Superpowers** is the baseline workflow: clarify, plan, TDD, execute, review, verify.
+- **CodeGraph** is the codebase intelligence layer: query it before broad exploration or reading many files.
 - **ECC** is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
 - **Agy Native Bridge** is an optional Antigravity-only execution adapter for bounded tasks through Antigravity's own OAuth/session, not a Gemini API key.
 
-Layers, Impeccable, and CodeGraph are intentionally deferred until the Superpowers/ECC foundation is stable.
+Layers and Impeccable are intentionally deferred until the Superpowers/CodeGraph/ECC foundation is stable.
 
 ## Why This Shape
 
@@ -17,6 +18,7 @@ The clean architecture is:
 ```text
 Vorth = project-local activation and memory
 Superpowers = process controller
+CodeGraph = codebase intelligence layer
 ECC = specialist engineering pool
 Agy Native Bridge = bounded Antigravity execution adapter
 Antigravity/Codex = harness adapters
@@ -35,8 +37,8 @@ Vorth stays opt-in per repository. A repository becomes Vorth-enabled only after
 The executable equivalent is:
 
 ```powershell
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled --codegraph enabled
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled
 ```
 
 Init writes project-local activation files:
@@ -46,6 +48,7 @@ Init writes project-local activation files:
   vorth.config.md
   context.md
   instructions/
+    codegraph.md
     superpowers-ecc.md
     turn-process.md
   plans/
@@ -55,7 +58,34 @@ GEMINI.md   # Antigravity adapter block
 AGENTS.md   # Codex adapter block
 ```
 
-`GEMINI.md` and `AGENTS.md` contain managed `VORTH:START` / `VORTH:END` blocks that tell the agent to read `.vorth/context.md` and follow `.vorth/instructions/superpowers-ecc.md`.
+`GEMINI.md` and `AGENTS.md` contain managed `VORTH:START` / `VORTH:END` blocks that tell the agent to read `.vorth/context.md`, follow `.vorth/instructions/superpowers-ecc.md`, and apply `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
+
+## CodeGraph
+
+Vorth treats CodeGraph as an active project-local intelligence layer, not as the process controller.
+
+When `--codegraph enabled` is selected, `vorth init` checks for the `codegraph` CLI and runs this in the target repository:
+
+```powershell
+codegraph init
+```
+
+That creates the project `.codegraph/` index using CodeGraph's own tooling. If the CLI is missing, Vorth still writes `.vorth/` and the managed activation blocks, then reports the official install options from [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph).
+
+Vorth does not silently run remote installers, `npm i -g`, or global agent wiring. Agent MCP wiring belongs to CodeGraph's own command:
+
+```powershell
+codegraph install
+```
+
+The operating rule is:
+
+- Before broad codebase exploration, use CodeGraph first.
+- Before reading many files, query CodeGraph first.
+- For small changes where the target file is already clear, skip CodeGraph.
+- If CodeGraph is unavailable or stale, fall back to narrow `rg` and targeted file reads.
+
+CodeGraph telemetry follows its official policy. See [TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md) for opt-out options.
 
 ## Native vs Project-Local
 
@@ -163,6 +193,7 @@ The worker profile must be logged in once interactively before it can serve nati
 | Stack | Role in Vorth | When Used |
 | --- | --- | --- |
 | Superpowers | Baseline workflow | Every non-trivial Vorth task. |
+| CodeGraph | Codebase intelligence layer | Before broad codebase exploration, file discovery, relationship tracing, and many-file reads. |
 | ECC | Specialist layer | Planning complexity, TDD support, code review, security, build failures, language-specific risks. |
 | Agy Native Bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
 
@@ -188,16 +219,18 @@ The worker profile must be logged in once interactively before it can serve nati
 The project-local CLI implements the same flows:
 
 ```powershell
-node bin\vorth.mjs init --repo <repo> --bridge enabled
+node bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled
 node bin\vorth.mjs status --repo <repo>
 node bin\vorth.mjs reset --repo <repo> --confirm
 ```
 
-`status` detects project bridge files, checks user-level MCP registration read-only, and prints a suggested registration snippet when missing. It does not edit global MCP config automatically.
+`status` detects project bridge files, CodeGraph CLI/index state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
 
 ## Operating Rule
 
 Superpowers decides **when** work happens.
+
+CodeGraph decides **where to look first** when the codebase area is not already clear.
 
 ECC decides **who** should review or assist specialist work.
 

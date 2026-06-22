@@ -5,9 +5,10 @@ This repository is Vorth-enabled.
 ## Current Focus
 
 - Superpowers is the baseline workflow.
+- CodeGraph is the codebase intelligence layer when enabled.
 - ECC is the specialist layer.
 - Agy Native Bridge is configured by `.vorth/vorth.config.md`.
-- Layers, Impeccable, and CodeGraph are disabled in this Vorth version.
+- Layers and Impeccable are disabled in this Vorth version.
 
 ## Notes
 
