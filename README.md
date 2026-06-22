@@ -67,6 +67,17 @@ AGENTS.md   # Codex adapter block
 
 `GEMINI.md` and `AGENTS.md` contain managed `VORTH:START` / `VORTH:END` blocks that tell the agent to read `.vorth/context.md`, follow `.vorth/instructions/stack-routing.md`, and then apply only the stack instructions relevant to the task.
 
+Vorth also writes a local Git exclude block to `.git/info/exclude` when the target is a Git repository. This keeps local system folders out of commits without changing project `.gitignore`:
+
+```text
+.vorth/
+.codegraph/
+.agent/
+.agents/
+.codex/
+.gemini/
+```
+
 ## CodeGraph
 
 Vorth treats CodeGraph as an active project-local intelligence layer, not as the process controller.
@@ -274,6 +285,7 @@ node bin\vorth.mjs reset --repo <repo> --confirm
 ```
 
 `status` detects project bridge files, CodeGraph CLI/index state, Impeccable assets, Layers vendor state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
+It also reports whether Vorth's local Git exclude block is configured.
 
 ## Operating Rule
 

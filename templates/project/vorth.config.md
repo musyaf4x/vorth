@@ -31,6 +31,9 @@ layers: {{LAYERS}}
 layers_scope: project-local
 layers_policy: product-decision-gate
 
+git_hygiene: local-exclude
+git_hygiene_patterns: .vorth/, .codegraph/, .agent/, .agents/, .codex/, .gemini/
+
 conditional_stacks: impeccable, layers
 deferred_stacks: none
 created_by: vorth-cli

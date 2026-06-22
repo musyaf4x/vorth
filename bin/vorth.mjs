@@ -12,6 +12,16 @@ const PROJECT_TEMPLATE_DIR = path.join(SKILL_ROOT, "templates", "project");
 const BRIDGE_TEMPLATE_DIR = path.join(SKILL_ROOT, "templates", "mcp", "vorth-agy-native-bridge");
 const START = "<!-- VORTH:START -->";
 const END = "<!-- VORTH:END -->";
+const GIT_EXCLUDE_START = "# VORTH:GIT-EXCLUDE:START";
+const GIT_EXCLUDE_END = "# VORTH:GIT-EXCLUDE:END";
+const GIT_EXCLUDE_PATTERNS = [
+  ".vorth/",
+  ".codegraph/",
+  ".agent/",
+  ".agents/",
+  ".codex/",
+  ".gemini/"
+];
 
 const command = process.argv[2] || "help";
 const options = parseArgs(process.argv.slice(3));
@@ -64,6 +74,7 @@ function cmdInit(options) {
 
   upsertManagedBlock(path.join(repo.root, "GEMINI.md"), readTemplate("GEMINI.block.md"));
   upsertManagedBlock(path.join(repo.root, "AGENTS.md"), readTemplate("AGENTS.block.md"));
+  ensureGitHygiene(repo);
 
   if (bridge === "enabled") {
     copyBridgeTemplate(repo.root);
@@ -97,6 +108,7 @@ function cmdReset(options) {
 
   removeManagedBlock(path.join(repo.root, "GEMINI.md"));
   removeManagedBlock(path.join(repo.root, "AGENTS.md"));
+  removeGitHygiene(repo);
 
   const resolvedVorthDir = path.resolve(vorthDir);
   if (path.basename(resolvedVorthDir) !== ".vorth" || !isInside(repo.root, resolvedVorthDir)) {
@@ -109,7 +121,7 @@ function cmdReset(options) {
 
   console.log("Vorth reset complete.");
   console.log(`Repo: ${repo.root}`);
-  console.log("Removed: .vorth/ and Vorth managed blocks in GEMINI.md / AGENTS.md");
+  console.log("Removed: .vorth/, Vorth managed blocks in GEMINI.md / AGENTS.md, and Vorth local git exclude block");
   console.log("Preserved: .agent/, .agents/, .codex/, ECC/Superpowers installs, and user-level MCP config");
 }
 
@@ -140,6 +152,7 @@ function collectStatus(repo, options = {}) {
       geminiBlock: hasManagedBlock(path.join(repo.root, "GEMINI.md")),
       agentsBlock: hasManagedBlock(path.join(repo.root, "AGENTS.md"))
     },
+    gitHygiene: detectGitHygiene(repo),
     superpowers: detectSuperpowers(repo.root, config),
     ecc: detectEcc(repo.root, config),
     codegraph: detectCodeGraph(repo.root, config),
@@ -197,6 +210,8 @@ function writeConfig(repo, bridge, codegraph, impeccable, layers) {
   text = upsertKey(text, "layers", layers);
   text = upsertKey(text, "layers_scope", "project-local");
   text = upsertKey(text, "layers_policy", "product-decision-gate");
+  text = upsertKey(text, "git_hygiene", "local-exclude");
+  text = upsertKey(text, "git_hygiene_patterns", GIT_EXCLUDE_PATTERNS.join(", "));
   text = upsertKey(text, "conditional_stacks", "impeccable, layers");
   text = upsertKey(text, "deferred_stacks", "none");
   writeText(configPath, ensureTrailingNewline(text));
@@ -249,6 +264,75 @@ function detectCodeGraph(repoRoot, config) {
     },
     mcpRegistration: detectCodeGraphMcpRegistration()
   };
+}
+
+function ensureGitHygiene(repo) {
+  if (repo.git !== "present") {
+    return { status: "skipped", reason: "not a git repository" };
+  }
+
+  const excludePath = getGitExcludePath(repo);
+  if (!excludePath) {
+    return { status: "error", message: "Unable to resolve git info/exclude path" };
+  }
+
+  const block = [
+    GIT_EXCLUDE_START,
+    "# Local Vorth/agent system files. This block is not committed.",
+    ...GIT_EXCLUDE_PATTERNS,
+    GIT_EXCLUDE_END
+  ].join("\n");
+  upsertDelimitedBlock(excludePath, GIT_EXCLUDE_START, GIT_EXCLUDE_END, block);
+  return { status: "configured", path: excludePath, patterns: GIT_EXCLUDE_PATTERNS };
+}
+
+function detectGitHygiene(repo) {
+  if (repo.git !== "present") {
+    return { status: "skipped", reason: "not a git repository", patterns: GIT_EXCLUDE_PATTERNS };
+  }
+
+  const excludePath = getGitExcludePath(repo);
+  if (!excludePath || !fs.existsSync(excludePath)) {
+    return { status: "missing", path: excludePath, patterns: GIT_EXCLUDE_PATTERNS };
+  }
+
+  const text = fs.readFileSync(excludePath, "utf8");
+  const hasBlock = text.includes(GIT_EXCLUDE_START) && text.includes(GIT_EXCLUDE_END);
+  const missingPatterns = GIT_EXCLUDE_PATTERNS.filter((pattern) => !text.includes(pattern));
+  return {
+    status: hasBlock && missingPatterns.length === 0 ? "configured" : "missing",
+    path: excludePath,
+    block: hasBlock ? "present" : "missing",
+    patterns: GIT_EXCLUDE_PATTERNS,
+    missingPatterns
+  };
+}
+
+function removeGitHygiene(repo) {
+  if (repo.git !== "present") {
+    return { status: "skipped", reason: "not a git repository" };
+  }
+
+  const excludePath = getGitExcludePath(repo);
+  if (!excludePath || !fs.existsSync(excludePath)) {
+    return { status: "missing", path: excludePath };
+  }
+
+  removeDelimitedBlock(excludePath, GIT_EXCLUDE_START, GIT_EXCLUDE_END);
+  return { status: "removed", path: excludePath };
+}
+
+function getGitExcludePath(repo) {
+  try {
+    const rawPath = execFileSync("git", ["-C", repo.root, "rev-parse", "--git-path", "info/exclude"], {
+      encoding: "utf8",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    return path.resolve(path.isAbsolute(rawPath) ? rawPath : path.join(repo.root, rawPath));
+  } catch {
+    return null;
+  }
 }
 
 function detectImpeccable(repoRoot, config) {
@@ -673,6 +757,7 @@ function printInitResult(repo, bridge, codegraph, impeccable, layers, status, co
   console.log(`Repo: ${repo.root}`);
   console.log(`Branch: ${repo.branch}`);
   console.log("Mode: project-local");
+  console.log(`Git local exclude: ${status.gitHygiene.status}`);
   console.log(`Superpowers: ${status.superpowers.status}`);
   console.log(`ECC Antigravity: ${status.ecc.antigravity.status}`);
   console.log(`ECC Codex: ${status.ecc.codex.status}`);
@@ -715,6 +800,7 @@ function printStatus(status) {
   console.log(`Config: ${status.vorthConfig.exists ? "present" : "missing"}`);
   console.log(`GEMINI.md block: ${status.activation.geminiBlock ? "present" : "missing"}`);
   console.log(`AGENTS.md block: ${status.activation.agentsBlock ? "present" : "missing"}`);
+  console.log(`Git local exclude: ${status.gitHygiene.status}`);
   console.log(`Superpowers: ${status.superpowers.status} (${status.superpowers.scope})`);
   console.log(`ECC Antigravity: ${status.ecc.antigravity.status}`);
   console.log(`ECC Codex: ${status.ecc.codex.status}`);
@@ -861,6 +947,25 @@ function upsertManagedBlock(filePath, block) {
   writeText(filePath, next);
 }
 
+function upsertDelimitedBlock(filePath, startMarker, endMarker, block) {
+  const normalizedBlock = ensureTrailingNewline(block.trim());
+  const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
+  const startIndex = existing.indexOf(startMarker);
+  const endIndex = existing.indexOf(endMarker);
+
+  let next;
+  if (startIndex >= 0 && endIndex >= startIndex) {
+    const afterEnd = endIndex + endMarker.length;
+    next = `${existing.slice(0, startIndex).trimEnd()}\n\n${normalizedBlock}${existing.slice(afterEnd).replace(/^\s*/, "\n")}`.trimStart();
+  } else if (!existing.trim()) {
+    next = normalizedBlock;
+  } else {
+    next = `${existing.trimEnd()}\n\n${normalizedBlock}`;
+  }
+
+  writeText(filePath, next);
+}
+
 function replaceManagedBlock(existing, block) {
   const startIndex = existing.indexOf(START);
   const endIndex = existing.indexOf(END);
@@ -871,6 +976,21 @@ function replaceManagedBlock(existing, block) {
 
   if (!existing.trim()) return block;
   return `${existing.trimEnd()}\n\n${block}`;
+}
+
+function removeDelimitedBlock(filePath, startMarker, endMarker) {
+  const existing = fs.readFileSync(filePath, "utf8");
+  const startIndex = existing.indexOf(startMarker);
+  const endIndex = existing.indexOf(endMarker);
+  if (startIndex < 0 || endIndex < startIndex) return;
+
+  const afterEnd = endIndex + endMarker.length;
+  const next = `${existing.slice(0, startIndex).trimEnd()}${existing.slice(afterEnd) ? "\n" : ""}${existing.slice(afterEnd).trimStart()}`;
+  if (next.trim()) {
+    writeText(filePath, next);
+  } else {
+    fs.writeFileSync(filePath, "", "utf8");
+  }
 }
 
 function removeManagedBlock(filePath) {

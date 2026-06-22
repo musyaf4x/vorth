@@ -157,6 +157,8 @@ impeccable_policy: frontend-quality-gate
 layers: advisory, enabled, disabled, or skipped
 layers_scope: project-local
 layers_policy: product-decision-gate
+git_hygiene: local-exclude
+git_hygiene_patterns: .vorth/, .codegraph/, .agent/, .agents/, .codex/, .gemini/
 conditional_stacks: impeccable, layers
 deferred_stacks: none
 ```
@@ -240,7 +242,24 @@ Behavior rule when active:
 - For small changes where the file or symbol is already clear, skip CodeGraph.
 - If CodeGraph is unavailable, stale, or not registered as a tool, say the graph layer is degraded and fall back to narrow `rg` and targeted file reads.
 
-### Phase 5: Impeccable Availability
+### Phase 5: Git Hygiene
+
+When the target is a Git repository, Vorth must write a managed local exclude block to `.git/info/exclude`, not `.gitignore`.
+
+Ignore these local system folders:
+
+```text
+.vorth/
+.codegraph/
+.agent/
+.agents/
+.codex/
+.gemini/
+```
+
+This keeps Vorth, CodeGraph indexes, and agent/plugin system assets out of commit/push history while leaving pure project files clean. Do not add `GEMINI.md` or `AGENTS.md` to the exclude block because they may be real project instruction files.
+
+### Phase 6: Impeccable Availability
 
 Default mode is `impeccable: auto`.
 
@@ -260,7 +279,7 @@ npx --yes impeccable install --providers=gemini,codex --scope=project
 5. Do not copy Impeccable internals by hand. Respect its official installer output.
 6. Route to Impeccable only for frontend/UI work.
 
-### Phase 6: Layers Availability
+### Phase 7: Layers Availability
 
 Default mode is `layers: advisory`.
 
@@ -274,7 +293,7 @@ git clone https://github.com/jamiemill/layers-skills.git .vorth/vendor/layers-sk
 3. Detect at least `layers-intro`, `layers-orient`, and `layers-conceptual-model` when vendored.
 4. Route to Layers only when product/UX intent, domain model, user needs, conceptual model, interaction flow, or surface direction is unclear.
 
-### Phase 7: Agy Native Bridge
+### Phase 8: Agy Native Bridge
 
 Run this phase only when the user explicitly approves the Agy-only bridge for the target project. Do not configure it for Codex.
 
@@ -326,7 +345,7 @@ Forbidden bridge tasks:
 - Large refactor without a written plan.
 - Any Codex workflow.
 
-### Phase 8: Write Vorth Project Files
+### Phase 9: Write Vorth Project Files
 
 Create or update these files. Preserve user content. Use managed blocks for existing `GEMINI.md` and `AGENTS.md`.
 
@@ -453,7 +472,7 @@ Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 - Do not let Layers become a ritual for every engineering task.
 ```
 
-### Phase 9: Announce Result
+### Phase 10: Announce Result
 
 Report:
 
@@ -466,6 +485,7 @@ ECC Codex: [installed/missing/skipped]
 CodeGraph: [enabled/disabled/skipped]
 CodeGraph CLI: [detected/missing/error]
 CodeGraph index: [present/missing]
+Git local exclude: [configured/missing/skipped]
 Impeccable: [auto/enabled/disabled/skipped]
 Impeccable install: [installed/recommended/not_required/missing/skipped]
 Layers: [advisory/enabled/disabled/skipped]
@@ -487,6 +507,7 @@ For `/vorth status`, inspect and report:
 - ECC Antigravity availability: `.agent/ecc-install-state.json` and `.agent/skills`.
 - ECC Codex availability: current Codex skills/agents if visible, or config value if not.
 - CodeGraph availability: config state, CLI availability, `.codegraph/` index, and MCP registration if readable.
+- Git hygiene: whether `.git/info/exclude` contains Vorth's local system-folder ignore block.
 - Impeccable availability: config state, frontend detection, installed assets, `PRODUCT.md`, and `DESIGN.md`.
 - Layers availability: config state, vendor checkout, and core Layers skill files.
 - Agy Native Bridge availability: `.vorth/mcp/vorth-agy-native-bridge`, config flag, MCP registration, and `vorth_agy_status` if available.
@@ -500,7 +521,7 @@ For `/vorth status`, inspect and report:
 For `/vorth reset`:
 
 1. Ask for confirmation.
-2. Remove only `.vorth/` and the Vorth managed blocks in `GEMINI.md` and `AGENTS.md`.
+2. Remove only `.vorth/`, the Vorth managed blocks in `GEMINI.md` and `AGENTS.md`, and Vorth's managed local git exclude block.
 3. Do not uninstall ECC, Superpowers, Impeccable, `.agent/`, `.agents/`, `.codex/`, `.gemini/`, `PRODUCT.md`, `DESIGN.md`, or `.codegraph/` automatically. Those may be owned by their official installers or the user.
 4. If the user wants stack uninstall, point them to each stack's official uninstall/disable path.
 5. Do not remove user-level MCP registrations automatically. If Vorth added one, show the exact entry and ask before changing it.
