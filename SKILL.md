@@ -1,6 +1,6 @@
 ---
 name: vorth
-description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow and ECC as the specialist engineering layer, with an optional Antigravity-only MCP bridge for bounded Gemini 3.5 Flash High execution, while keeping other stacks disabled until explicitly added later.
+description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow and ECC as the specialist engineering layer, with an optional Antigravity-only native OAuth MCP bridge for bounded Gemini 3.5 Flash High execution, while keeping other stacks disabled until explicitly added later.
 ---
 
 # Vorth Engineering Harness
@@ -19,7 +19,7 @@ Use this hierarchy:
 1. Vorth decides whether the repository opted in.
 2. Superpowers controls the process flow.
 3. ECC supplies specialists at specific quality gates.
-4. The optional Agy Flash High MCP bridge executes only bounded tasks after routing is already decided.
+4. The optional Agy Native Bridge executes only bounded Antigravity tasks after routing is already decided.
 5. The user's explicit instruction always wins over Vorth, Superpowers, ECC, and model routing.
 
 Short form:
@@ -28,7 +28,7 @@ Short form:
 Vorth = project-local activation and memory
 Superpowers = workflow baseline
 ECC = specialist pool
-Agy Flash High MCP bridge = optional bounded execution adapter
+Agy Native Bridge = optional bounded execution adapter
 Antigravity/Codex = harness adapters
 ```
 
@@ -41,7 +41,7 @@ Run this check before any planning, coding, debugging, review, or status respons
 3. If Vorth is active:
    - Read `.vorth/context.md` if present.
    - Read `.vorth/instructions/superpowers-ecc.md` if present.
-   - Announce one compact line: `Vorth active: Superpowers baseline, ECC specialists, mode [full/native/project-local/degraded], Agy Flash bridge [enabled/disabled]`.
+   - Announce one compact line: `Vorth active: Superpowers baseline, ECC specialists, mode [full/native/project-local/degraded], Agy native bridge [enabled/disabled]`.
    - Continue with the Vorth workflow below.
 4. If Vorth is not active and the user did not type `/vorth init`, do not apply Vorth. Answer normally.
 5. If the user typed `/vorth init`, run the init flow.
@@ -59,11 +59,21 @@ Therefore Vorth must distinguish two scopes:
 
 Default to `project-local` unless the user explicitly approves a native/global install.
 
-#### Agy Flash High MCP Bridge
+#### Agy Native Bridge
 
-Vorth may configure an Antigravity-only MCP bridge named `vorth-flash-high-executor`. This bridge lets the main Agy agent call Gemini 3.5 Flash with `thinkingLevel: high` inside the same turn for bounded execution tasks. It is not a new stack, not a baseline behavior, and not available to Codex.
+Vorth may configure an Antigravity-only MCP bridge named `vorth-agy-native-bridge`. This bridge lets the main Agy agent call Antigravity's own cascade RPC through the active Antigravity OAuth/session for bounded execution tasks. It is not a new stack, not a baseline behavior, and not available to Codex.
 
 Use the bridge only after Superpowers/ECC have reduced the work to a specific execution task. Do not use it for architecture, planning, security review, broad debugging, final code review, or ambiguous work. Read `references/agy-flash-high-mcp-bridge.md` before creating or modifying the bridge.
+
+The target model is resolved at runtime from Antigravity's model list. The known Gemini 3.5 Flash High mapping is:
+
+```yaml
+id: gemini-3-flash-agent
+displayName: Gemini 3.5 Flash (High)
+model: MODEL_PLACEHOLDER_M132
+```
+
+Do not use Gemini API keys for this bridge.
 
 ### Codex
 
@@ -106,9 +116,12 @@ Set `install_scope` in `.vorth/vorth.config.md`:
 Also record these model-routing fields:
 
 ```yaml
+agy_native_bridge: disabled, enabled, or skipped
+agy_native_bridge_profile: active or worker
+agy_native_bridge_server: .vorth/mcp/vorth-agy-native-bridge/server.mjs
 agy_flash_high_executor: disabled, enabled, or skipped
-agy_flash_high_model: gemini-3.5-flash
-agy_flash_high_thinking_level: high
+agy_flash_high_model_id: gemini-3-flash-agent
+agy_flash_high_model_enum: auto
 agy_flash_high_scope: agy-only
 codex_flash_high_executor: disabled
 ```
@@ -162,23 +175,33 @@ This writes ECC-managed assets to `.agent/` and records install state in `.agent
 
 If the user declines global Codex install, keep Codex activation project-local via `AGENTS.md` and use ECC only when its specialists are already available in the current Codex environment.
 
-### Phase 4: Agy Flash High MCP Bridge
+### Phase 4: Agy Native Bridge
 
 Run this phase only when the user explicitly approves the Agy-only bridge for the target project. Do not configure it for Codex.
 
 1. Read `references/agy-flash-high-mcp-bridge.md`.
-2. Prefer a project-local bridge under `.vorth/mcp/vorth-flash-high-executor/`.
-3. The bridge must expose one tool: `vorth_flash_high_execute`.
-4. The bridge must call Gemini with:
+2. Copy the project-local template from this Vorth skill:
 
-```yaml
-model: gemini-3.5-flash
-thinkingLevel: high
+```text
+templates/mcp/vorth-agy-native-bridge/
 ```
 
+into the target project:
+
+```text
+.vorth/mcp/vorth-agy-native-bridge/
+```
+
+3. The bridge must expose:
+   - `vorth_agy_status`
+   - `vorth_agy_models`
+   - `vorth_agy_delegate`
+   - `vorth_agy_read_result`
+   - `vorth_flash_high_execute` as a compatibility alias
+4. The bridge must call Antigravity native RPC through the active Antigravity session. It must not use `GEMINI_API_KEY`.
 5. The bridge must default to patch-only output. The main Agy agent applies changes, runs verification, and remains responsible for final review.
-6. If Antigravity only supports user-level MCP registration, ask before editing `~/.gemini/config/mcp_config.json`. Keep the server path project-local and guard execution by checking `.vorth/vorth.config.md`.
-7. Never store API keys in the repository. Use `GEMINI_API_KEY` from the user environment or another approved secret path.
+6. If Antigravity only supports user-level MCP registration, ask before editing `~/.gemini/config/mcp_config.json`. Keep the server path project-local and guard delegation by checking `.vorth/vorth.config.md`.
+7. Never print or persist Antigravity command lines, CSRF tokens, OAuth tokens, cookies, or user status values.
 8. Record the chosen state in `.vorth/vorth.config.md`.
 
 Allowed bridge tasks:
@@ -191,6 +214,7 @@ Allowed bridge tasks:
 
 Forbidden bridge tasks:
 - Architecture or product decisions.
+- Planning and task decomposition.
 - Security review.
 - Final code review.
 - Broad or ambiguous debugging.
@@ -210,7 +234,7 @@ Create or update these files. Preserve user content. Use managed blocks for exis
     turn-process.md
   plans/
   mcp/
-    vorth-flash-high-executor/   # optional, Agy only
+    vorth-agy-native-bridge/     # optional, Agy only
 GEMINI.md
 AGENTS.md
 ```
@@ -229,7 +253,7 @@ Before planning, coding, debugging, reviewing, or committing in this repo:
 3. Use Superpowers as the baseline workflow.
 4. Use ECC only as the specialist layer.
 5. Update `.vorth/context.md` after meaningful work.
-6. If `.vorth/vorth.config.md` enables the Agy Flash High bridge, use it only for bounded execution tasks.
+6. If `.vorth/vorth.config.md` enables the Agy Native Bridge, use it only for bounded execution tasks.
 <!-- VORTH:END -->
 ```
 
@@ -250,7 +274,7 @@ Before planning, coding, debugging, reviewing, or committing in this repo:
 
 Codex loads AGENTS.md at session start. After `/vorth init`, restart Codex or open a new thread for automatic activation.
 
-The Agy Flash High MCP bridge is Antigravity-only. Codex must ignore it.
+The Agy Native Bridge is Antigravity-only. Codex must ignore it.
 <!-- VORTH:END -->
 ```
 
@@ -277,11 +301,11 @@ Superpowers owns process. ECC owns specialist review and targeted expertise.
 - Build/type/test failure: ECC build-error-resolver.
 - Language-specific risk: matching ECC language reviewer.
 
-## Agy Flash High Execution
+## Agy Native Bridge Execution
 
 Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 
-- Delegate to `vorth_flash_high_execute` only after the task is bounded.
+- Delegate to `vorth_agy_delegate` or `vorth_flash_high_execute` only after the task is bounded.
 - Send complete task text, file scope, acceptance criteria, and verification command suggestions.
 - Request patch-only output by default.
 - Apply and verify changes in the main Agy session.
@@ -304,7 +328,7 @@ Mode: [project-local/native/mixed/degraded]
 Superpowers: [native/project-local/missing]
 ECC Antigravity: [installed/missing/skipped]
 ECC Codex: [installed/missing/skipped]
-Agy Flash High MCP bridge: [enabled/disabled/skipped]
+Agy Native Bridge: [enabled/disabled/skipped]
 Activation: GEMINI.md + AGENTS.md managed blocks
 Next: restart/open a new Agy or Codex session in this repo
 ```
@@ -320,7 +344,7 @@ For `/vorth status`, inspect and report:
 - Superpowers availability and scope.
 - ECC Antigravity availability: `.agent/ecc-install-state.json` and `.agent/skills`.
 - ECC Codex availability: current Codex skills/agents if visible, or config value if not.
-- Agy Flash High MCP bridge availability: `.vorth/mcp/vorth-flash-high-executor`, config flag, MCP registration, and whether `GEMINI_API_KEY` is configured without printing its value.
+- Agy Native Bridge availability: `.vorth/mcp/vorth-agy-native-bridge`, config flag, MCP registration, and `vorth_agy_status` if available.
 - Current `.vorth/context.md` summary.
 - Any deferred stacks, always shown as disabled in this version.
 
@@ -371,4 +395,5 @@ For `/vorth reset`:
 - Do not activate deferred stacks in this version.
 - Preserve user files and unrelated changes.
 - Keep `.vorth/context.md` concise and current.
-- Keep the Agy Flash High MCP bridge Antigravity-only and task-specific.
+- Keep the Agy Native Bridge Antigravity-only and task-specific.
+- Never print or persist Antigravity command lines, CSRF tokens, OAuth tokens, cookies, or user status values.

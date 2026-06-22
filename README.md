@@ -6,7 +6,7 @@ Current focus: **Superpowers + ECC only**.
 
 - **Superpowers** is the baseline workflow: clarify, plan, TDD, execute, review, verify.
 - **ECC** is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
-- **Agy Flash High MCP bridge** is an optional Antigravity-only execution adapter for bounded tasks.
+- **Agy Native Bridge** is an optional Antigravity-only execution adapter for bounded tasks through Antigravity's own OAuth/session, not a Gemini API key.
 
 Layers, Impeccable, and CodeGraph are intentionally deferred until the Superpowers/ECC foundation is stable.
 
@@ -18,7 +18,7 @@ The clean architecture is:
 Vorth = project-local activation and memory
 Superpowers = process controller
 ECC = specialist engineering pool
-Agy Flash High MCP bridge = bounded execution adapter
+Agy Native Bridge = bounded Antigravity execution adapter
 Antigravity/Codex = harness adapters
 ```
 
@@ -43,7 +43,7 @@ Init writes project-local activation files:
     turn-process.md
   plans/
   mcp/
-    vorth-flash-high-executor/   # optional, Agy only
+    vorth-agy-native-bridge/     # optional, Agy only
 GEMINI.md   # Antigravity adapter block
 AGENTS.md   # Codex adapter block
 ```
@@ -80,18 +80,51 @@ ECC's Codex target writes to Codex home and is therefore treated as native/globa
 
 Vorth must not silently run native/global installers. It should ask first and record the selected scope in `.vorth/vorth.config.md`.
 
-## Agy Flash High MCP Bridge
+## Agy Native Bridge
 
-Vorth can optionally configure an Antigravity-only MCP bridge named `vorth-flash-high-executor`. It gives the main Agy agent a same-turn tool for bounded execution using Gemini 3.5 Flash with `thinkingLevel: high`.
+Vorth can optionally configure an Antigravity-only MCP bridge named `vorth-agy-native-bridge`. It gives the main Agy agent same-turn tools for bounded execution through the active Antigravity language server and the user's Antigravity OAuth session.
 
-This bridge is intentionally narrow:
+The bridge exposes:
+
+| Tool | Purpose |
+| --- | --- |
+| `vorth_agy_status` | Check whether a usable Antigravity workspace language server is available. |
+| `vorth_agy_models` | Read available Antigravity models and resolve the Flash High model dynamically. |
+| `vorth_agy_delegate` | Start a bounded cascade task and return the planner response/result. |
+| `vorth_agy_read_result` | Read a previous cascade result by `cascadeId`. |
+| `vorth_flash_high_execute` | Compatibility alias for bounded Flash High execution. |
+
+The target model is resolved at runtime. On the tested Antigravity runtime, Gemini 3.5 Flash High maps to:
+
+```yaml
+id: gemini-3-flash-agent
+displayName: Gemini 3.5 Flash (High)
+model: MODEL_PLACEHOLDER_M132
+```
+
+Do not hardcode the enum as the only path. Use the resolver first and treat `MODEL_PLACEHOLDER_M132` as a known fallback.
+
+The bridge is intentionally narrow:
+
 - It is enabled only per project after user approval.
 - It is never configured for Codex.
 - It is called only after Superpowers/ECC reduce work to a specific execution task.
 - It defaults to patch-only output; the main Agy agent applies, verifies, and reviews.
 - It must not handle architecture, security review, broad debugging, or final review.
 
-If Agy requires user-level MCP registration, Vorth should ask first, point the registration at the project-local server under `.vorth/mcp/`, and make the server reject calls outside a Vorth-enabled repo.
+If Agy requires user-level MCP registration, Vorth should ask first, point the registration at the project-local server under `.vorth/mcp/`, and make the server reject delegation calls outside a Vorth-enabled repo.
+
+## Worker Profile
+
+For a second Google/Antigravity account, use the same Antigravity binary with an isolated profile:
+
+```powershell
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext --workspace .
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status --user-data-dir C:\tmp\vorth-agy-worker
+```
+
+The worker profile must be logged in once interactively before it can serve native OAuth requests. The bridge should prefer the active profile until the worker profile reports a usable workspace language server.
 
 ## Modes
 
@@ -109,7 +142,7 @@ If Agy requires user-level MCP registration, Vorth should ask first, point the r
 - Vorth uses `GEMINI.md` as the project instruction adapter.
 - ECC's official Antigravity target writes `.agent/rules`, `.agent/workflows`, `.agent/skills`, and `.agent/ecc-install-state.json`.
 - Superpowers' official Antigravity plugin uses session-start activation, so it is the best fidelity path when the user accepts harness-level install.
-- The optional Flash High bridge is Agy-only and exposed through MCP, not through Codex instructions.
+- The optional native bridge is Agy-only and exposed through MCP, not through Codex instructions.
 
 ### Codex
 
@@ -124,7 +157,7 @@ If Agy requires user-level MCP registration, Vorth should ask first, point the r
 | --- | --- | --- |
 | Superpowers | Baseline workflow | Every non-trivial Vorth task. |
 | ECC | Specialist layer | Planning complexity, TDD support, code review, security, build failures, language-specific risks. |
-| Agy Flash High MCP bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
+| Agy Native Bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
 
 ## Specialist Routing
 
@@ -151,6 +184,6 @@ Superpowers decides **when** work happens.
 
 ECC decides **who** should review or assist specialist work.
 
-The Agy Flash High MCP bridge decides nothing. It only executes bounded tasks that the main Agy agent delegates.
+The Agy Native Bridge decides nothing. It only executes bounded tasks that the main Agy agent delegates.
 
 Vorth decides **whether this repository opted in** and keeps the project context current.
