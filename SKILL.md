@@ -91,6 +91,16 @@ This means Vorth's Codex adapter must write a project `AGENTS.md` managed block 
 
 If a message starts with `/vorth` but is not one of these commands, explain the supported commands.
 
+The executable implementation is:
+
+```powershell
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled
+node <vorth-skill>\bin\vorth.mjs status --repo <repo>
+node <vorth-skill>\bin\vorth.mjs reset --repo <repo> --confirm
+```
+
+Use the CLI when available. It is idempotent, preserves user content outside Vorth managed blocks, and treats user-level MCP registration as read-only.
+
 ## Init Flow
 
 Run this only when the user types `/vorth init`.
@@ -190,6 +200,12 @@ into the target project:
 
 ```text
 .vorth/mcp/vorth-agy-native-bridge/
+```
+
+When using the CLI, this is handled by:
+
+```powershell
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled
 ```
 
 3. The bridge must expose:
@@ -345,6 +361,7 @@ For `/vorth status`, inspect and report:
 - ECC Antigravity availability: `.agent/ecc-install-state.json` and `.agent/skills`.
 - ECC Codex availability: current Codex skills/agents if visible, or config value if not.
 - Agy Native Bridge availability: `.vorth/mcp/vorth-agy-native-bridge`, config flag, MCP registration, and `vorth_agy_status` if available.
+- The CLI status command must inspect user-level MCP config read-only and print a suggested registration snippet when missing.
 - Current `.vorth/context.md` summary.
 - Any deferred stacks, always shown as disabled in this version.
 

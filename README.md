@@ -32,6 +32,13 @@ Vorth stays opt-in per repository. A repository becomes Vorth-enabled only after
 /vorth init
 ```
 
+The executable equivalent is:
+
+```powershell
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled
+```
+
 Init writes project-local activation files:
 
 ```text
@@ -177,6 +184,16 @@ The worker profile must be logged in once interactively before it can serve nati
 | `/vorth init` | Initialize Vorth in the current repository. |
 | `/vorth status` | Show activation files, stack availability, install scope, and context summary. |
 | `/vorth reset` | Remove only Vorth-managed files/blocks after confirmation. |
+
+The project-local CLI implements the same flows:
+
+```powershell
+node bin\vorth.mjs init --repo <repo> --bridge enabled
+node bin\vorth.mjs status --repo <repo>
+node bin\vorth.mjs reset --repo <repo> --confirm
+```
+
+`status` detects project bridge files, checks user-level MCP registration read-only, and prints a suggested registration snippet when missing. It does not edit global MCP config automatically.
 
 ## Operating Rule
 
