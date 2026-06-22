@@ -1,6 +1,6 @@
 ---
 name: vorth
-description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow and ECC as the specialist engineering layer while keeping other stacks disabled until explicitly added later.
+description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow and ECC as the specialist engineering layer, with an optional Antigravity-only MCP bridge for bounded Gemini 3.5 Flash High execution, while keeping other stacks disabled until explicitly added later.
 ---
 
 # Vorth Engineering Harness
@@ -19,7 +19,8 @@ Use this hierarchy:
 1. Vorth decides whether the repository opted in.
 2. Superpowers controls the process flow.
 3. ECC supplies specialists at specific quality gates.
-4. The user's explicit instruction always wins over Vorth, Superpowers, and ECC.
+4. The optional Agy Flash High MCP bridge executes only bounded tasks after routing is already decided.
+5. The user's explicit instruction always wins over Vorth, Superpowers, ECC, and model routing.
 
 Short form:
 
@@ -27,6 +28,7 @@ Short form:
 Vorth = project-local activation and memory
 Superpowers = workflow baseline
 ECC = specialist pool
+Agy Flash High MCP bridge = optional bounded execution adapter
 Antigravity/Codex = harness adapters
 ```
 
@@ -39,7 +41,7 @@ Run this check before any planning, coding, debugging, review, or status respons
 3. If Vorth is active:
    - Read `.vorth/context.md` if present.
    - Read `.vorth/instructions/superpowers-ecc.md` if present.
-   - Announce one compact line: `Vorth active: Superpowers baseline, ECC specialists, mode [full/native/project-local/degraded]`.
+   - Announce one compact line: `Vorth active: Superpowers baseline, ECC specialists, mode [full/native/project-local/degraded], Agy Flash bridge [enabled/disabled]`.
    - Continue with the Vorth workflow below.
 4. If Vorth is not active and the user did not type `/vorth init`, do not apply Vorth. Answer normally.
 5. If the user typed `/vorth init`, run the init flow.
@@ -56,6 +58,12 @@ Therefore Vorth must distinguish two scopes:
 - `project-local`: keep Vorth activation scoped to this repository using `.vorth/`, `GEMINI.md`, `AGENTS.md`, `.agent/`, and `.agents/` bootstraps. Best isolation, but may not get every native session hook.
 
 Default to `project-local` unless the user explicitly approves a native/global install.
+
+#### Agy Flash High MCP Bridge
+
+Vorth may configure an Antigravity-only MCP bridge named `vorth-flash-high-executor`. This bridge lets the main Agy agent call Gemini 3.5 Flash with `thinkingLevel: high` inside the same turn for bounded execution tasks. It is not a new stack, not a baseline behavior, and not available to Codex.
+
+Use the bridge only after Superpowers/ECC have reduced the work to a specific execution task. Do not use it for architecture, planning, security review, broad debugging, final code review, or ambiguous work. Read `references/agy-flash-high-mcp-bridge.md` before creating or modifying the bridge.
 
 ### Codex
 
@@ -94,6 +102,18 @@ Set `install_scope` in `.vorth/vorth.config.md`:
 - `native` only after explicit user approval, because Superpowers and some ECC Codex installs may affect the harness globally.
 - `mixed` when Antigravity is project-local but Codex or Superpowers uses a native/global install.
 - `degraded` when one or both stacks are missing and the user declines installation.
+
+Also record these model-routing fields:
+
+```yaml
+agy_flash_high_executor: disabled, enabled, or skipped
+agy_flash_high_model: gemini-3.5-flash
+agy_flash_high_thinking_level: high
+agy_flash_high_scope: agy-only
+codex_flash_high_executor: disabled
+```
+
+Keep `codex_flash_high_executor` disabled. The bridge is only for Antigravity.
 
 ### Phase 2: Superpowers Availability
 
@@ -142,7 +162,42 @@ This writes ECC-managed assets to `.agent/` and records install state in `.agent
 
 If the user declines global Codex install, keep Codex activation project-local via `AGENTS.md` and use ECC only when its specialists are already available in the current Codex environment.
 
-### Phase 4: Write Vorth Project Files
+### Phase 4: Agy Flash High MCP Bridge
+
+Run this phase only when the user explicitly approves the Agy-only bridge for the target project. Do not configure it for Codex.
+
+1. Read `references/agy-flash-high-mcp-bridge.md`.
+2. Prefer a project-local bridge under `.vorth/mcp/vorth-flash-high-executor/`.
+3. The bridge must expose one tool: `vorth_flash_high_execute`.
+4. The bridge must call Gemini with:
+
+```yaml
+model: gemini-3.5-flash
+thinkingLevel: high
+```
+
+5. The bridge must default to patch-only output. The main Agy agent applies changes, runs verification, and remains responsible for final review.
+6. If Antigravity only supports user-level MCP registration, ask before editing `~/.gemini/config/mcp_config.json`. Keep the server path project-local and guard execution by checking `.vorth/vorth.config.md`.
+7. Never store API keys in the repository. Use `GEMINI_API_KEY` from the user environment or another approved secret path.
+8. Record the chosen state in `.vorth/vorth.config.md`.
+
+Allowed bridge tasks:
+- Bounded implementation after plan approval.
+- Build/type/test fix with known failure.
+- TDD GREEN phase for a small test target.
+- Mechanical refactor with explicit file scope.
+- Documentation update.
+- E2E/test execution summary.
+
+Forbidden bridge tasks:
+- Architecture or product decisions.
+- Security review.
+- Final code review.
+- Broad or ambiguous debugging.
+- Large refactor without a written plan.
+- Any Codex workflow.
+
+### Phase 5: Write Vorth Project Files
 
 Create or update these files. Preserve user content. Use managed blocks for existing `GEMINI.md` and `AGENTS.md`.
 
@@ -154,6 +209,8 @@ Create or update these files. Preserve user content. Use managed blocks for exis
     superpowers-ecc.md
     turn-process.md
   plans/
+  mcp/
+    vorth-flash-high-executor/   # optional, Agy only
 GEMINI.md
 AGENTS.md
 ```
@@ -172,6 +229,7 @@ Before planning, coding, debugging, reviewing, or committing in this repo:
 3. Use Superpowers as the baseline workflow.
 4. Use ECC only as the specialist layer.
 5. Update `.vorth/context.md` after meaningful work.
+6. If `.vorth/vorth.config.md` enables the Agy Flash High bridge, use it only for bounded execution tasks.
 <!-- VORTH:END -->
 ```
 
@@ -191,6 +249,8 @@ Before planning, coding, debugging, reviewing, or committing in this repo:
 5. Update `.vorth/context.md` after meaningful work.
 
 Codex loads AGENTS.md at session start. After `/vorth init`, restart Codex or open a new thread for automatic activation.
+
+The Agy Flash High MCP bridge is Antigravity-only. Codex must ignore it.
 <!-- VORTH:END -->
 ```
 
@@ -217,6 +277,16 @@ Superpowers owns process. ECC owns specialist review and targeted expertise.
 - Build/type/test failure: ECC build-error-resolver.
 - Language-specific risk: matching ECC language reviewer.
 
+## Agy Flash High Execution
+
+Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
+
+- Delegate to `vorth_flash_high_execute` only after the task is bounded.
+- Send complete task text, file scope, acceptance criteria, and verification command suggestions.
+- Request patch-only output by default.
+- Apply and verify changes in the main Agy session.
+- Do not use this bridge for planning, architecture, security review, final review, or Codex.
+
 ## Bounds
 
 - Do not invoke every ECC specialist by default.
@@ -224,7 +294,7 @@ Superpowers owns process. ECC owns specialist review and targeted expertise.
 - Do not use deferred stacks until Vorth explicitly enables them.
 ```
 
-### Phase 5: Announce Result
+### Phase 6: Announce Result
 
 Report:
 
@@ -234,6 +304,7 @@ Mode: [project-local/native/mixed/degraded]
 Superpowers: [native/project-local/missing]
 ECC Antigravity: [installed/missing/skipped]
 ECC Codex: [installed/missing/skipped]
+Agy Flash High MCP bridge: [enabled/disabled/skipped]
 Activation: GEMINI.md + AGENTS.md managed blocks
 Next: restart/open a new Agy or Codex session in this repo
 ```
@@ -249,6 +320,7 @@ For `/vorth status`, inspect and report:
 - Superpowers availability and scope.
 - ECC Antigravity availability: `.agent/ecc-install-state.json` and `.agent/skills`.
 - ECC Codex availability: current Codex skills/agents if visible, or config value if not.
+- Agy Flash High MCP bridge availability: `.vorth/mcp/vorth-flash-high-executor`, config flag, MCP registration, and whether `GEMINI_API_KEY` is configured without printing its value.
 - Current `.vorth/context.md` summary.
 - Any deferred stacks, always shown as disabled in this version.
 
@@ -260,6 +332,7 @@ For `/vorth reset`:
 2. Remove only `.vorth/` and the Vorth managed blocks in `GEMINI.md` and `AGENTS.md`.
 3. Do not uninstall ECC, Superpowers, `.agent/`, `.agents/`, or `.codex/` automatically. Those may be owned by their official installers or the user.
 4. If the user wants stack uninstall, point them to each stack's official uninstall/disable path.
+5. Do not remove user-level MCP registrations automatically. If Vorth added one, show the exact entry and ask before changing it.
 
 ## Workflows When Active
 
@@ -298,3 +371,4 @@ For `/vorth reset`:
 - Do not activate deferred stacks in this version.
 - Preserve user files and unrelated changes.
 - Keep `.vorth/context.md` concise and current.
+- Keep the Agy Flash High MCP bridge Antigravity-only and task-specific.

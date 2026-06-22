@@ -6,6 +6,7 @@ Current focus: **Superpowers + ECC only**.
 
 - **Superpowers** is the baseline workflow: clarify, plan, TDD, execute, review, verify.
 - **ECC** is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
+- **Agy Flash High MCP bridge** is an optional Antigravity-only execution adapter for bounded tasks.
 
 Layers, Impeccable, and CodeGraph are intentionally deferred until the Superpowers/ECC foundation is stable.
 
@@ -17,6 +18,7 @@ The clean architecture is:
 Vorth = project-local activation and memory
 Superpowers = process controller
 ECC = specialist engineering pool
+Agy Flash High MCP bridge = bounded execution adapter
 Antigravity/Codex = harness adapters
 ```
 
@@ -40,6 +42,8 @@ Init writes project-local activation files:
     superpowers-ecc.md
     turn-process.md
   plans/
+  mcp/
+    vorth-flash-high-executor/   # optional, Agy only
 GEMINI.md   # Antigravity adapter block
 AGENTS.md   # Codex adapter block
 ```
@@ -76,6 +80,19 @@ ECC's Codex target writes to Codex home and is therefore treated as native/globa
 
 Vorth must not silently run native/global installers. It should ask first and record the selected scope in `.vorth/vorth.config.md`.
 
+## Agy Flash High MCP Bridge
+
+Vorth can optionally configure an Antigravity-only MCP bridge named `vorth-flash-high-executor`. It gives the main Agy agent a same-turn tool for bounded execution using Gemini 3.5 Flash with `thinkingLevel: high`.
+
+This bridge is intentionally narrow:
+- It is enabled only per project after user approval.
+- It is never configured for Codex.
+- It is called only after Superpowers/ECC reduce work to a specific execution task.
+- It defaults to patch-only output; the main Agy agent applies, verifies, and reviews.
+- It must not handle architecture, security review, broad debugging, or final review.
+
+If Agy requires user-level MCP registration, Vorth should ask first, point the registration at the project-local server under `.vorth/mcp/`, and make the server reject calls outside a Vorth-enabled repo.
+
 ## Modes
 
 | Mode | Meaning |
@@ -92,6 +109,7 @@ Vorth must not silently run native/global installers. It should ask first and re
 - Vorth uses `GEMINI.md` as the project instruction adapter.
 - ECC's official Antigravity target writes `.agent/rules`, `.agent/workflows`, `.agent/skills`, and `.agent/ecc-install-state.json`.
 - Superpowers' official Antigravity plugin uses session-start activation, so it is the best fidelity path when the user accepts harness-level install.
+- The optional Flash High bridge is Agy-only and exposed through MCP, not through Codex instructions.
 
 ### Codex
 
@@ -106,6 +124,7 @@ Vorth must not silently run native/global installers. It should ask first and re
 | --- | --- | --- |
 | Superpowers | Baseline workflow | Every non-trivial Vorth task. |
 | ECC | Specialist layer | Planning complexity, TDD support, code review, security, build failures, language-specific risks. |
+| Agy Flash High MCP bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
 
 ## Specialist Routing
 
@@ -131,5 +150,7 @@ Vorth must not silently run native/global installers. It should ask first and re
 Superpowers decides **when** work happens.
 
 ECC decides **who** should review or assist specialist work.
+
+The Agy Flash High MCP bridge decides nothing. It only executes bounded tasks that the main Agy agent delegates.
 
 Vorth decides **whether this repository opted in** and keeps the project context current.
