@@ -2,16 +2,19 @@
 
 Vorth is a project-local engineering harness for Antigravity and Codex.
 
-Current focus: **Superpowers + CodeGraph + ECC + conditional Impeccable/Layers**.
+Current focus: **Superpowers + CodeGraph + ECC + conditional Impeccable/Layers + Ponytail/RTK/Caveman guard layers**.
 
 - **Superpowers** is the baseline workflow: clarify, plan, TDD, execute, review, verify.
 - **CodeGraph** is the codebase intelligence layer: query it before broad exploration or reading many files.
 - **ECC** is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
 - **Impeccable** is the frontend/UI quality gate when a task touches visible product experience.
 - **Layers** is the product/UX decision-discovery gate when intent, flow, or conceptual model is unclear.
+- **Ponytail** is the complexity guard: apply it after context and before edit to avoid unnecessary abstraction, dependencies, or scope growth.
+- **RTK** is the command-output optimizer for noisy shell output when its CLI is available.
+- **Caveman** is compact-report mode for subagent and handoff summaries, not the main conversation style.
 - **Agy Native Bridge** is an optional Antigravity-only execution adapter for bounded tasks through Antigravity's own OAuth/session, not a Gemini API key.
 
-Impeccable and Layers are conditional stacks, not always-on rituals.
+Impeccable and Layers are conditional stacks, not always-on rituals. Ponytail, RTK, and Caveman are guard layers with narrow routing rules.
 
 ## Why This Shape
 
@@ -24,6 +27,9 @@ CodeGraph = codebase intelligence layer
 ECC = specialist engineering pool
 Impeccable = frontend/UI quality gate
 Layers = product/UX decision-discovery gate
+Ponytail = complexity guard before edit
+RTK = command-output optimization layer
+Caveman = compact-report mode
 Agy Native Bridge = bounded Antigravity execution adapter
 Antigravity/Codex = harness adapters
 ```
@@ -41,8 +47,8 @@ Vorth stays opt-in per repository. A repository becomes Vorth-enabled only after
 The executable equivalent is:
 
 ```powershell
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled --codegraph enabled --impeccable auto --layers advisory
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
 ```
 
 Init writes project-local activation files:
@@ -56,6 +62,9 @@ Init writes project-local activation files:
     codegraph.md
     impeccable.md
     layers.md
+    ponytail.md
+    rtk.md
+    caveman.md
     superpowers-ecc.md
     turn-process.md
   plans/
@@ -104,6 +113,53 @@ The operating rule is:
 - If CodeGraph is unavailable or stale, fall back to narrow `rg` and targeted file reads.
 
 CodeGraph telemetry follows its official policy. See [TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md) for opt-out options.
+
+## Ponytail
+
+Vorth treats [Ponytail](https://github.com/DietrichGebert/ponytail) as a complexity guard. It is active by default as project-local policy:
+
+```yaml
+ponytail: full
+ponytail_policy: after-context-before-edit
+ponytail_ultra: explicit-only
+ponytail_safety_override: enabled
+```
+
+Use Ponytail after CodeGraph/Superpowers have gathered enough context and before editing code. It should prefer reuse, standard library/native platform features, existing dependencies, and the smallest readable diff. Do not let Ponytail reduce security, correctness, migrations, public API compatibility, accessibility, or data integrity.
+
+Vorth does not install Ponytail globally. If official Ponytail skill assets already exist in the project, `status` reports them; otherwise Vorth applies the project-local policy instruction.
+
+## RTK
+
+Vorth treats [RTK](https://github.com/rtk-ai/rtk) as an optional command-output optimization layer.
+
+Default mode is:
+
+```yaml
+rtk: auto
+rtk_policy: compress-noisy-shell-output
+rtk_raw_fallback: on-failure-or-ambiguity
+rtk_exact_output_bypass: enabled
+```
+
+Use RTK when available for noisy command output such as large diffs, broad searches, test/lint/build output, and logs. Bypass it for exact raw output, JSON that must be consumed downstream, auth-sensitive commands, interactive commands, destructive operations, or ambiguous compressed output.
+
+Vorth only detects the `rtk` CLI. It does not install RTK globally.
+
+## Caveman
+
+Vorth treats [Caveman](https://github.com/juliusbrussee/caveman) as compact-report mode.
+
+Default mode is:
+
+```yaml
+caveman: subagent-only
+caveman_policy: compact-reports-not-main-dialog
+caveman_autoclarity: enabled
+caveman_memory_compress: explicit-only
+```
+
+Use Caveman only for low-risk subagent summaries, handoff notes, or short status reports. Do not use it for main analysis, architecture/product reasoning, security warnings, irreversible actions, or multi-step instructions that need clarity.
 
 ## Impeccable
 
@@ -255,6 +311,9 @@ The worker profile must be logged in once interactively before it can serve nati
 | ECC | Specialist layer | Planning complexity, TDD support, code review, security, build failures, language-specific risks. |
 | Impeccable | Frontend/UI quality gate | UI creation, critique, audit, polish, harden, layout, accessibility, and responsive behavior. |
 | Layers | Product/UX decision gate | Ambiguous product intent, domain, user needs, conceptual model, interaction flow, or surface direction. |
+| Ponytail | Complexity guard | After context and before edit; dependency, abstraction, and scope decisions. |
+| RTK | Command-output optimizer | Noisy diffs, searches, test output, build logs, and shell output where summaries are enough. |
+| Caveman | Compact-report mode | Subagent summaries, handoffs, and short low-risk status reports. |
 | Agy Native Bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
 
 ## Specialist Routing
@@ -279,12 +338,12 @@ The worker profile must be logged in once interactively before it can serve nati
 The project-local CLI implements the same flows:
 
 ```powershell
-node bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory
+node bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
 node bin\vorth.mjs status --repo <repo>
 node bin\vorth.mjs reset --repo <repo> --confirm
 ```
 
-`status` detects project bridge files, CodeGraph CLI/index state, Impeccable assets, Layers vendor state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
+`status` detects project bridge files, CodeGraph CLI/index state, Impeccable assets, Layers vendor state, Ponytail/Caveman policy assets, RTK CLI state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
 It also reports whether Vorth's local Git exclude block is configured.
 
 ## Operating Rule
@@ -298,6 +357,12 @@ ECC decides **who** should review or assist specialist work.
 Impeccable decides **how to improve visible UI quality** once product direction is clear.
 
 Layers decides **what product/UX questions must be answered** before UI/code when intent is unclear.
+
+Ponytail decides **how little new code is enough** after context is clear.
+
+RTK decides **which noisy shell output can be summarized** before it consumes context.
+
+Caveman decides **when low-risk reports can be compact**, while clarity remains higher priority.
 
 The Agy Native Bridge decides nothing. It only executes bounded tasks that the main Agy agent delegates.
 

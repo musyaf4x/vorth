@@ -4,6 +4,9 @@ Superpowers owns process. ECC owns specialist review and targeted expertise.
 CodeGraph owns codebase-intelligence routing before broad exploration.
 Impeccable owns frontend/UI quality gates.
 Layers owns product/UX decision discovery.
+Ponytail owns complexity reduction before edits.
+RTK owns noisy command-output optimization.
+Caveman owns compact low-risk summaries.
 
 ## Workflow
 
@@ -18,6 +21,23 @@ Layers owns product/UX decision discovery.
 - Before reading many files, query CodeGraph first.
 - For small changes with a clear file or symbol, skip CodeGraph.
 - If CodeGraph is unavailable, fall back to narrow `rg` and targeted file reads.
+
+## Ponytail Routing
+
+- Use Ponytail after context gathering and before code edits.
+- Prefer reuse, stdlib/native platform, existing dependencies, and the smallest readable diff.
+- Do not let Ponytail reduce security, correctness, accessibility, migrations, public API compatibility, data integrity, or meaningful tests.
+
+## RTK Routing
+
+- Use RTK for noisy shell output when available and exact output is not required.
+- Bypass RTK for raw output requests, downstream JSON, auth-sensitive or interactive commands, destructive operations, and ambiguous summaries.
+- If RTK is unavailable, continue normally and mention degraded output optimization only when relevant.
+
+## Caveman Routing
+
+- Use Caveman only for compact subagent summaries, handoff notes, and short low-risk status reports.
+- Do not use Caveman for main analysis, product/architecture reasoning, security warnings, irreversible actions, or clarity-sensitive multi-step instructions.
 
 ## Impeccable Routing
 
@@ -55,3 +75,6 @@ Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 - Do not let CodeGraph replace Superpowers or ECC.
 - Do not let Impeccable replace Layers for product decisions.
 - Do not let Layers become a ritual for every engineering task.
+- Do not let Ponytail override real correctness, security, accessibility, migration, API, or data-integrity needs.
+- Do not let RTK hide exact output when exact output matters.
+- Do not let Caveman make main analysis or risk communication ambiguous.

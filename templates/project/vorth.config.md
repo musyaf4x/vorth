@@ -31,9 +31,28 @@ layers: {{LAYERS}}
 layers_scope: project-local
 layers_policy: product-decision-gate
 
+ponytail: {{PONYTAIL}}
+ponytail_scope: project-local-policy
+ponytail_policy: after-context-before-edit
+ponytail_ultra: explicit-only
+ponytail_safety_override: enabled
+
+rtk: {{RTK}}
+rtk_scope: cli-detected
+rtk_policy: compress-noisy-shell-output
+rtk_raw_fallback: on-failure-or-ambiguity
+rtk_exact_output_bypass: enabled
+
+caveman: {{CAVEMAN}}
+caveman_scope: project-local-policy
+caveman_policy: compact-reports-not-main-dialog
+caveman_autoclarity: enabled
+caveman_memory_compress: explicit-only
+
 git_hygiene: local-exclude
 git_hygiene_patterns: .vorth/, .codegraph/, .agent/, .agents/, .codex/, .gemini/
 
 conditional_stacks: impeccable, layers
+guard_stacks: ponytail, rtk, caveman
 deferred_stacks: none
 created_by: vorth-cli

@@ -55,6 +55,9 @@ function cmdInit(options) {
   const codegraph = normalizeCodeGraphOption(options.codegraph || "enabled");
   const impeccable = normalizeImpeccableOption(options.impeccable || "auto");
   const layers = normalizeLayersOption(options.layers || "advisory");
+  const ponytail = normalizePonytailOption(options.ponytail || "full");
+  const rtk = normalizeRtkOption(options.rtk || "auto");
+  const caveman = normalizeCavemanOption(options.caveman || "subagent-only");
   const vorthDir = path.join(repo.root, ".vorth");
 
   ensureDir(vorthDir);
@@ -63,13 +66,16 @@ function cmdInit(options) {
   ensureDir(path.join(vorthDir, "mcp"));
   ensureDir(path.join(vorthDir, "vendor"));
 
-  writeConfig(repo, bridge, codegraph, impeccable, layers);
+  writeConfig(repo, bridge, codegraph, impeccable, layers, ponytail, rtk, caveman);
   writeIfMissing(path.join(vorthDir, "context.md"), readTemplate("context.md"));
   writeText(path.join(vorthDir, "instructions", "stack-routing.md"), readTemplate(path.join("instructions", "stack-routing.md")));
   writeText(path.join(vorthDir, "instructions", "superpowers-ecc.md"), readTemplate(path.join("instructions", "superpowers-ecc.md")));
   writeText(path.join(vorthDir, "instructions", "codegraph.md"), readTemplate(path.join("instructions", "codegraph.md")));
   writeText(path.join(vorthDir, "instructions", "impeccable.md"), readTemplate(path.join("instructions", "impeccable.md")));
   writeText(path.join(vorthDir, "instructions", "layers.md"), readTemplate(path.join("instructions", "layers.md")));
+  writeText(path.join(vorthDir, "instructions", "ponytail.md"), readTemplate(path.join("instructions", "ponytail.md")));
+  writeText(path.join(vorthDir, "instructions", "rtk.md"), readTemplate(path.join("instructions", "rtk.md")));
+  writeText(path.join(vorthDir, "instructions", "caveman.md"), readTemplate(path.join("instructions", "caveman.md")));
   writeText(path.join(vorthDir, "instructions", "turn-process.md"), readTemplate(path.join("instructions", "turn-process.md")));
 
   upsertManagedBlock(path.join(repo.root, "GEMINI.md"), readTemplate("GEMINI.block.md"));
@@ -84,7 +90,7 @@ function cmdInit(options) {
   const impeccableInstall = runImpeccableInstall(repo.root, impeccable);
   const layersInstall = runLayersInstall(repo.root, layers);
   const status = collectStatus(repo, { runSelfTest: bridge === "enabled" });
-  printInitResult(repo, bridge, codegraph, impeccable, layers, status, codeGraphInit, impeccableInstall, layersInstall);
+  printInitResult(repo, bridge, codegraph, impeccable, layers, ponytail, rtk, caveman, status, codeGraphInit, impeccableInstall, layersInstall);
 }
 
 function cmdStatus(options) {
@@ -158,6 +164,9 @@ function collectStatus(repo, options = {}) {
     codegraph: detectCodeGraph(repo.root, config),
     impeccable: detectImpeccable(repo.root, config),
     layers: detectLayers(repo.root, config),
+    ponytail: detectPonytail(repo.root, config),
+    rtk: detectRtk(config),
+    caveman: detectCaveman(repo.root, config),
     agyNativeBridge: {
       config: config.agy_native_bridge || "missing",
       files: bridgePresent ? "present" : "missing",
@@ -170,11 +179,16 @@ function collectStatus(repo, options = {}) {
       impeccable: config.impeccable || "auto",
       layers: config.layers || "advisory"
     },
+    guardStacks: {
+      ponytail: config.ponytail || "full",
+      rtk: config.rtk || "auto",
+      caveman: config.caveman || "subagent-only"
+    },
     context: summarizeContext(path.join(repo.root, ".vorth", "context.md"))
   };
 }
 
-function writeConfig(repo, bridge, codegraph, impeccable, layers) {
+function writeConfig(repo, bridge, codegraph, impeccable, layers, ponytail, rtk, caveman) {
   const configPath = path.join(repo.root, ".vorth", "vorth.config.md");
   const bridgeExecutor = bridge === "enabled" ? "enabled" : bridge === "skipped" ? "skipped" : "disabled";
 
@@ -184,7 +198,10 @@ function writeConfig(repo, bridge, codegraph, impeccable, layers) {
       .replaceAll("{{AGY_FLASH_HIGH_EXECUTOR}}", bridgeExecutor)
       .replaceAll("{{CODEGRAPH}}", codegraph)
       .replaceAll("{{IMPECCABLE}}", impeccable)
-      .replaceAll("{{LAYERS}}", layers);
+      .replaceAll("{{LAYERS}}", layers)
+      .replaceAll("{{PONYTAIL}}", ponytail)
+      .replaceAll("{{RTK}}", rtk)
+      .replaceAll("{{CAVEMAN}}", caveman);
     writeText(configPath, template);
     return;
   }
@@ -210,9 +227,25 @@ function writeConfig(repo, bridge, codegraph, impeccable, layers) {
   text = upsertKey(text, "layers", layers);
   text = upsertKey(text, "layers_scope", "project-local");
   text = upsertKey(text, "layers_policy", "product-decision-gate");
+  text = upsertKey(text, "ponytail", ponytail);
+  text = upsertKey(text, "ponytail_scope", "project-local-policy");
+  text = upsertKey(text, "ponytail_policy", "after-context-before-edit");
+  text = upsertKey(text, "ponytail_ultra", "explicit-only");
+  text = upsertKey(text, "ponytail_safety_override", "enabled");
+  text = upsertKey(text, "rtk", rtk);
+  text = upsertKey(text, "rtk_scope", "cli-detected");
+  text = upsertKey(text, "rtk_policy", "compress-noisy-shell-output");
+  text = upsertKey(text, "rtk_raw_fallback", "on-failure-or-ambiguity");
+  text = upsertKey(text, "rtk_exact_output_bypass", "enabled");
+  text = upsertKey(text, "caveman", caveman);
+  text = upsertKey(text, "caveman_scope", "project-local-policy");
+  text = upsertKey(text, "caveman_policy", "compact-reports-not-main-dialog");
+  text = upsertKey(text, "caveman_autoclarity", "enabled");
+  text = upsertKey(text, "caveman_memory_compress", "explicit-only");
   text = upsertKey(text, "git_hygiene", "local-exclude");
   text = upsertKey(text, "git_hygiene_patterns", GIT_EXCLUDE_PATTERNS.join(", "));
   text = upsertKey(text, "conditional_stacks", "impeccable, layers");
+  text = upsertKey(text, "guard_stacks", "ponytail, rtk, caveman");
   text = upsertKey(text, "deferred_stacks", "none");
   writeText(configPath, ensureTrailingNewline(text));
 }
@@ -412,6 +445,83 @@ function detectLayers(repoRoot, config) {
   };
 }
 
+
+function detectPonytail(repoRoot, config) {
+  const agentsSkill = path.join(repoRoot, ".agents", "skills", "ponytail", "SKILL.md");
+  const geminiSkill = path.join(repoRoot, ".gemini", "skills", "ponytail", "SKILL.md");
+  const codexSkill = path.join(repoRoot, ".codex", "skills", "ponytail", "SKILL.md");
+  const vendorSkill = path.join(repoRoot, ".vorth", "vendor", "ponytail", "skills", "ponytail", "SKILL.md");
+  const providers = {
+    agentsSkill: fs.existsSync(agentsSkill),
+    geminiSkill: fs.existsSync(geminiSkill),
+    codexSkill: fs.existsSync(codexSkill),
+    vendorSkill: fs.existsSync(vendorSkill)
+  };
+  const configured = config.ponytail || "missing";
+  const installed = Object.values(providers).some(Boolean);
+  let install = installed ? "installed" : "policy_only";
+  if (["disabled", "skipped"].includes(configured)) install = configured;
+  return {
+    config: configured,
+    scope: config.ponytail_scope || "project-local-policy",
+    policy: config.ponytail_policy || "after-context-before-edit",
+    ultra: config.ponytail_ultra || "explicit-only",
+    safetyOverride: config.ponytail_safety_override || "enabled",
+    install,
+    providers,
+    paths: { agentsSkill, geminiSkill, codexSkill, vendorSkill }
+  };
+}
+
+function detectRtk(config) {
+  const configured = config.rtk || "missing";
+  const cli = detectRtkCli();
+  let availability = cli.status === "detected" ? "available" : "missing_cli";
+  if (["disabled", "skipped"].includes(configured)) availability = configured;
+  return {
+    config: configured,
+    scope: config.rtk_scope || "cli-detected",
+    policy: config.rtk_policy || "compress-noisy-shell-output",
+    rawFallback: config.rtk_raw_fallback || "on-failure-or-ambiguity",
+    exactOutputBypass: config.rtk_exact_output_bypass || "enabled",
+    availability,
+    cli
+  };
+}
+
+function detectCaveman(repoRoot, config) {
+  const agentsSkill = path.join(repoRoot, ".agents", "skills", "caveman", "SKILL.md");
+  const agentsCompressSkill = path.join(repoRoot, ".agents", "skills", "caveman-compress", "SKILL.md");
+  const geminiSkill = path.join(repoRoot, ".gemini", "skills", "caveman", "SKILL.md");
+  const geminiCompressSkill = path.join(repoRoot, ".gemini", "skills", "caveman-compress", "SKILL.md");
+  const codexSkill = path.join(repoRoot, ".codex", "skills", "caveman", "SKILL.md");
+  const codexCompressSkill = path.join(repoRoot, ".codex", "skills", "caveman-compress", "SKILL.md");
+  const vendorSkill = path.join(repoRoot, ".vorth", "vendor", "caveman", "skills", "caveman", "SKILL.md");
+  const providers = {
+    agentsSkill: fs.existsSync(agentsSkill),
+    agentsCompressSkill: fs.existsSync(agentsCompressSkill),
+    geminiSkill: fs.existsSync(geminiSkill),
+    geminiCompressSkill: fs.existsSync(geminiCompressSkill),
+    codexSkill: fs.existsSync(codexSkill),
+    codexCompressSkill: fs.existsSync(codexCompressSkill),
+    vendorSkill: fs.existsSync(vendorSkill)
+  };
+  const configured = config.caveman || "missing";
+  const installed = Object.values(providers).some(Boolean);
+  let install = installed ? "installed" : "policy_only";
+  if (["disabled", "skipped"].includes(configured)) install = configured;
+  return {
+    config: configured,
+    scope: config.caveman_scope || "project-local-policy",
+    policy: config.caveman_policy || "compact-reports-not-main-dialog",
+    autoclarity: config.caveman_autoclarity || "enabled",
+    memoryCompress: config.caveman_memory_compress || "explicit-only",
+    install,
+    providers,
+    paths: { agentsSkill, agentsCompressSkill, geminiSkill, geminiCompressSkill, codexSkill, codexCompressSkill, vendorSkill }
+  };
+}
+
 function detectFrontend(repoRoot) {
   const evidence = [];
   const packagePath = path.join(repoRoot, "package.json");
@@ -438,6 +548,21 @@ function detectFrontend(repoRoot) {
     detected: evidence.length > 0,
     evidence: evidence.slice(0, 12)
   };
+}
+
+
+function detectRtkCli() {
+  const versionResult = spawnWindowsAware("rtk", ["--version"], { timeout: 10000, maxBuffer: 1024 * 1024 });
+  if (!versionResult.error && versionResult.status === 0) {
+    return { status: "detected", version: sanitize((versionResult.stdout || versionResult.stderr || "").trim()) || "unknown" };
+  }
+  const helpResult = spawnWindowsAware("rtk", ["--help"], { timeout: 10000, maxBuffer: 1024 * 1024 });
+  if (!helpResult.error && helpResult.status === 0) return { status: "detected", version: "unknown" };
+  const error = versionResult.error || helpResult.error;
+  if (error && error.code === "ENOENT") {
+    return { status: "missing", install: { github: "https://github.com/rtk-ai/rtk" } };
+  }
+  return { status: "error", message: sanitize(error?.message || versionResult.stderr || helpResult.stderr || "Unable to run rtk") };
 }
 
 function detectCodeGraphCli() {
@@ -752,7 +877,7 @@ function runBridgeSelfTest(serverPath) {
   }
 }
 
-function printInitResult(repo, bridge, codegraph, impeccable, layers, status, codeGraphInit, impeccableInstall, layersInstall) {
+function printInitResult(repo, bridge, codegraph, impeccable, layers, ponytail, rtk, caveman, status, codeGraphInit, impeccableInstall, layersInstall) {
   console.log("Vorth initialized.");
   console.log(`Repo: ${repo.root}`);
   console.log(`Branch: ${repo.branch}`);
@@ -771,6 +896,12 @@ function printInitResult(repo, bridge, codegraph, impeccable, layers, status, co
   console.log(`Layers: ${layers}`);
   console.log(`Layers install: ${status.layers.install}`);
   console.log(`Layers init: ${layersInstall.status}`);
+  console.log(`Ponytail: ${ponytail}`);
+  console.log(`Ponytail install: ${status.ponytail.install}`);
+  console.log(`RTK: ${rtk}`);
+  console.log(`RTK CLI: ${status.rtk.cli.status}`);
+  console.log(`Caveman: ${caveman}`);
+  console.log(`Caveman install: ${status.caveman.install}`);
   console.log(`Agy Native Bridge: ${bridge}`);
   console.log("Activation: GEMINI.md + AGENTS.md managed blocks");
   if (codegraph === "enabled" && status.codegraph.cli.status !== "detected") {
@@ -783,6 +914,9 @@ function printInitResult(repo, bridge, codegraph, impeccable, layers, status, co
   }
   if (layers === "advisory") {
     console.log("Layers: advisory policy active; run vorth init --layers enabled only if you want project-local Layers skills vendored.");
+  }
+  if (rtk === "enabled" && status.rtk.cli.status !== "detected") {
+    console.log("Next: install RTK from https://github.com/rtk-ai/rtk, or rerun vorth init --rtk disabled.");
   }
   if (bridge === "enabled") {
     console.log(`Bridge files: ${status.agyNativeBridge.files}`);
@@ -823,6 +957,18 @@ function printStatus(status) {
   console.log(`Layers config: ${status.layers.config}`);
   console.log(`Layers install: ${status.layers.install}`);
   console.log(`Layers skills: intro ${status.layers.skills.intro ? "present" : "missing"}, orient ${status.layers.skills.orient ? "present" : "missing"}`);
+  console.log(`Ponytail config: ${status.ponytail.config}`);
+  console.log(`Ponytail install: ${status.ponytail.install}`);
+  console.log(`Ponytail policy: ${status.ponytail.policy}`);
+  console.log(`RTK config: ${status.rtk.config}`);
+  console.log(`RTK CLI: ${status.rtk.cli.status}${status.rtk.cli.version ? ` (${status.rtk.cli.version})` : ""}`);
+  console.log(`RTK availability: ${status.rtk.availability}`);
+  if (["auto", "enabled"].includes(status.rtk.config) && status.rtk.cli.status !== "detected") {
+    console.log("RTK install source: https://github.com/rtk-ai/rtk");
+  }
+  console.log(`Caveman config: ${status.caveman.config}`);
+  console.log(`Caveman install: ${status.caveman.install}`);
+  console.log(`Caveman policy: ${status.caveman.policy}`);
   console.log(`Agy Native Bridge config: ${status.agyNativeBridge.config}`);
   console.log(`Agy Native Bridge files: ${status.agyNativeBridge.files}`);
   console.log(`Agy MCP registration: ${status.agyNativeBridge.mcpRegistration.status}`);
@@ -832,6 +978,7 @@ function printStatus(status) {
     console.log(JSON.stringify(status.agyNativeBridge.mcpRegistration.suggestion, null, 2));
   }
   console.log("Conditional stacks: impeccable, layers");
+  console.log("Guard stacks: ponytail, rtk, caveman");
   console.log("Deferred stacks: none");
   console.log(`Context: ${status.context}`);
 }
@@ -916,6 +1063,30 @@ function normalizeLayersOption(value) {
   if (["true", "yes", "on"].includes(normalized)) return "enabled";
   if (["false", "no", "off"].includes(normalized)) return "disabled";
   fail(`Invalid --layers value: ${value}. Use advisory, enabled, disabled, or skipped.`);
+}
+
+function normalizePonytailOption(value) {
+  const normalized = String(value || "full").toLowerCase();
+  if (["full", "disabled", "skipped"].includes(normalized)) return normalized;
+  if (["true", "yes", "on"].includes(normalized)) return "full";
+  if (["false", "no", "off"].includes(normalized)) return "disabled";
+  fail(`Invalid --ponytail value: ${value}. Use full, disabled, or skipped.`);
+}
+
+function normalizeRtkOption(value) {
+  const normalized = String(value || "auto").toLowerCase();
+  if (["auto", "enabled", "disabled", "skipped"].includes(normalized)) return normalized;
+  if (["true", "yes", "on"].includes(normalized)) return "enabled";
+  if (["false", "no", "off"].includes(normalized)) return "disabled";
+  fail(`Invalid --rtk value: ${value}. Use auto, enabled, disabled, or skipped.`);
+}
+
+function normalizeCavemanOption(value) {
+  const normalized = String(value || "subagent-only").toLowerCase();
+  if (["subagent-only", "disabled", "skipped"].includes(normalized)) return normalized;
+  if (["true", "yes", "on"].includes(normalized)) return "subagent-only";
+  if (["false", "no", "off"].includes(normalized)) return "disabled";
+  fail(`Invalid --caveman value: ${value}. Use subagent-only, disabled, or skipped.`);
 }
 
 function isFalseOption(value) {
@@ -1086,7 +1257,7 @@ function printHelp() {
   console.log(`Vorth CLI
 
 Usage:
-  vorth init [--repo <path>] [--bridge enabled|disabled] [--codegraph enabled|disabled|skipped] [--impeccable auto|enabled|disabled|skipped] [--layers advisory|enabled|disabled|skipped]
+  vorth init [--repo <path>] [--bridge enabled|disabled] [--codegraph enabled|disabled|skipped] [--impeccable auto|enabled|disabled|skipped] [--layers advisory|enabled|disabled|skipped] [--ponytail full|disabled|skipped] [--rtk auto|enabled|disabled|skipped] [--caveman subagent-only|disabled|skipped]
   vorth status [--repo <path>] [--json] [--self-test false]
   vorth reset --confirm [--repo <path>]
 
@@ -1096,11 +1267,15 @@ Defaults:
   --codegraph   enabled
   --impeccable  auto
   --layers      advisory
+  --ponytail    full
+  --rtk         auto
+  --caveman     subagent-only
 
 Notes:
   init is idempotent and preserves user content outside Vorth managed blocks.
   init runs codegraph init when --codegraph enabled and the CodeGraph CLI is available.
   init runs official Impeccable or Layers installs only when the matching option is enabled.
+  init does not install Ponytail, RTK, or Caveman globally; it records project-local routing policy and RTK CLI status.
   status is read-only for user-level MCP config.
   reset removes only .vorth/ and Vorth managed blocks.`);
 }

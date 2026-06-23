@@ -1,6 +1,6 @@
 ---
 name: vorth
-description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow, CodeGraph as the codebase intelligence layer, ECC as the specialist engineering layer, Impeccable as a conditional frontend/UI quality gate, and Layers as an advisory product/UX decision gate, with an optional Antigravity-only native OAuth MCP bridge for bounded Gemini 3.5 Flash High execution.
+description: Project-local Vorth engineering harness for Antigravity and Codex. Use when the user runs /vorth init, /vorth status, or /vorth reset, or when the current repository has .vorth/vorth.config.md or a VORTH managed block in GEMINI.md or AGENTS.md. Vorth activates Superpowers as the baseline workflow, CodeGraph as the codebase intelligence layer, ECC as the specialist engineering layer, Impeccable as a conditional frontend/UI quality gate, Layers as an advisory product/UX decision gate, Ponytail as a complexity guard, RTK as command-output optimization, and Caveman as compact-report mode, with an optional Antigravity-only native OAuth MCP bridge for bounded Gemini 3.5 Flash High execution.
 ---
 
 # Vorth Engineering Harness
@@ -12,8 +12,11 @@ Vorth is a project-local harness for Antigravity and Codex. This version focuses
 - ECC is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
 - Impeccable is the frontend/UI quality gate when the task touches visible product experience.
 - Layers is the product/UX decision-discovery gate when product intent, conceptual model, or interaction flow is unclear.
+- Ponytail is the complexity guard after context and before edit.
+- RTK is the command-output optimizer for noisy shell output when available.
+- Caveman is compact-report mode for subagent and handoff summaries.
 
-Impeccable and Layers are conditional. Do not run them as a ritual for every task.
+Impeccable and Layers are conditional. Do not run them as a ritual for every task. Ponytail, RTK, and Caveman are guard layers with narrow routing rules.
 
 ## Core Contract
 
@@ -25,8 +28,11 @@ Use this hierarchy:
 4. ECC supplies specialists at specific quality gates.
 5. Impeccable supplies frontend/UI quality gates when UI is involved.
 6. Layers clarifies product/UX decisions when intent is unclear.
-7. The optional Agy Native Bridge executes only bounded Antigravity tasks after routing is already decided.
-8. The user's explicit instruction always wins over Vorth, Superpowers, CodeGraph, ECC, Impeccable, Layers, and model routing.
+7. Ponytail reduces unnecessary implementation complexity before edits.
+8. RTK compresses noisy shell output when exact raw output is not required.
+9. Caveman compresses only low-risk subagent, status, or handoff reports.
+10. The optional Agy Native Bridge executes only bounded Antigravity tasks after routing is already decided.
+11. The user's explicit instruction always wins over Vorth, Superpowers, CodeGraph, ECC, Impeccable, Layers, Ponytail, RTK, Caveman, and model routing.
 
 Short form:
 
@@ -37,6 +43,9 @@ CodeGraph = codebase intelligence layer
 ECC = specialist pool
 Impeccable = frontend/UI quality gate
 Layers = product/UX decision-discovery gate
+Ponytail = complexity guard before edit
+RTK = command-output optimization layer
+Caveman = compact-report mode
 Agy Native Bridge = optional bounded execution adapter
 Antigravity/Codex = harness adapters
 ```
@@ -52,9 +61,12 @@ Run this check before any planning, coding, debugging, review, or status respons
    - Read `.vorth/instructions/stack-routing.md` if present.
    - Read `.vorth/instructions/superpowers-ecc.md` if present.
    - Read `.vorth/instructions/codegraph.md` if present and `.vorth/vorth.config.md` does not disable CodeGraph.
+   - Read `.vorth/instructions/ponytail.md` when Ponytail is enabled and code edits are likely.
+   - Read `.vorth/instructions/rtk.md` when noisy command output is likely.
    - Read `.vorth/instructions/impeccable.md` when the task touches frontend/UI work.
    - Read `.vorth/instructions/layers.md` when product/UX decisions are unclear.
-   - Announce one compact line: `Vorth active: Superpowers baseline, CodeGraph [enabled/disabled/degraded], ECC specialists, Impeccable [auto/enabled/disabled], Layers [advisory/enabled/disabled], mode [project-local/degraded], Agy native bridge [enabled/disabled]`.
+   - Read `.vorth/instructions/caveman.md` only for compact subagent or handoff reports.
+   - Announce one compact line: `Vorth active: Superpowers baseline, CodeGraph [enabled/disabled/degraded], ECC specialists, Impeccable [auto/enabled/disabled], Layers [advisory/enabled/disabled], Ponytail [full/disabled], RTK [auto/enabled/disabled/degraded], Caveman [subagent-only/disabled], mode [project-local/degraded], Agy native bridge [enabled/disabled]`.
    - Continue with the Vorth workflow below.
 4. If Vorth is not active and the user did not type `/vorth init`, do not apply Vorth. Answer normally.
 5. If the user typed `/vorth init`, run the init flow.
@@ -107,7 +119,7 @@ If a message starts with `/vorth` but is not one of these commands, explain the 
 The executable implementation is:
 
 ```powershell
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory
+node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
 node <vorth-skill>\bin\vorth.mjs status --repo <repo>
 node <vorth-skill>\bin\vorth.mjs reset --repo <repo> --confirm
 ```
@@ -157,9 +169,25 @@ impeccable_policy: frontend-quality-gate
 layers: advisory, enabled, disabled, or skipped
 layers_scope: project-local
 layers_policy: product-decision-gate
+ponytail: full, disabled, or skipped
+ponytail_scope: project-local-policy
+ponytail_policy: after-context-before-edit
+ponytail_ultra: explicit-only
+ponytail_safety_override: enabled
+rtk: auto, enabled, disabled, or skipped
+rtk_scope: cli-detected
+rtk_policy: compress-noisy-shell-output
+rtk_raw_fallback: on-failure-or-ambiguity
+rtk_exact_output_bypass: enabled
+caveman: subagent-only, disabled, or skipped
+caveman_scope: project-local-policy
+caveman_policy: compact-reports-not-main-dialog
+caveman_autoclarity: enabled
+caveman_memory_compress: explicit-only
 git_hygiene: local-exclude
 git_hygiene_patterns: .vorth/, .codegraph/, .agent/, .agents/, .codex/, .gemini/
 conditional_stacks: impeccable, layers
+guard_stacks: ponytail, rtk, caveman
 deferred_stacks: none
 ```
 
@@ -258,6 +286,36 @@ Ignore these local system folders:
 ```
 
 This keeps Vorth, CodeGraph indexes, and agent/plugin system assets out of commit/push history while leaving pure project files clean. Do not add `GEMINI.md` or `AGENTS.md` to the exclude block because they may be real project instruction files.
+
+### Phase 5A: Ponytail Policy
+
+Default mode is `ponytail: full`.
+
+1. Write `.vorth/instructions/ponytail.md` as a project-local policy.
+2. Do not run global installers automatically.
+3. Detect official or user-installed Ponytail skill assets if present, but continue with policy-only mode when missing.
+4. Route to Ponytail after context gathering and before code edits.
+5. Do not let Ponytail reduce security, correctness, migrations, public API compatibility, accessibility, data integrity, or meaningful tests.
+
+### Phase 5B: RTK Availability
+
+Default mode is `rtk: auto`.
+
+1. Detect whether the `rtk` CLI is available by trying `rtk --version` and then `rtk --help`.
+2. Do not install RTK automatically.
+3. Use RTK for noisy shell output when available.
+4. Bypass RTK when exact raw output, downstream JSON, interactive commands, auth-sensitive commands, destructive operations, or ambiguous summaries are involved.
+5. If RTK is unavailable, continue normally and report degraded output optimization only when relevant.
+
+### Phase 5C: Caveman Policy
+
+Default mode is `caveman: subagent-only`.
+
+1. Write `.vorth/instructions/caveman.md` as a project-local policy.
+2. Do not run global installers automatically.
+3. Detect official or user-installed Caveman skill assets if present, but continue with policy-only mode when missing.
+4. Route to Caveman only for compact subagent summaries, handoff notes, and short low-risk status reports.
+5. Do not use Caveman for main analysis, product/architecture reasoning, security warnings, irreversible actions, or multi-step instructions where clarity matters.
 
 ### Phase 6: Impeccable Availability
 
@@ -358,6 +416,9 @@ Create or update these files. Preserve user content. Use managed blocks for exis
     codegraph.md
     impeccable.md
     layers.md
+    ponytail.md
+    rtk.md
+    caveman.md
     superpowers-ecc.md
     turn-process.md
   plans/
@@ -380,10 +441,13 @@ Before planning, coding, debugging, reviewing, or committing in this repo:
 2. Follow `.vorth/instructions/stack-routing.md`.
 3. Follow `.vorth/instructions/superpowers-ecc.md`.
 4. Follow `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
-5. Follow `.vorth/instructions/impeccable.md` for frontend/UI work.
-6. Follow `.vorth/instructions/layers.md` when product/UX decisions are unclear.
-7. Update `.vorth/context.md` after meaningful work.
-8. If `.vorth/vorth.config.md` enables the Agy Native Bridge, use it only for bounded execution tasks.
+5. Follow `.vorth/instructions/ponytail.md` before editing when Ponytail is enabled.
+6. Follow `.vorth/instructions/rtk.md` for noisy shell output when RTK is enabled or available.
+7. Follow `.vorth/instructions/impeccable.md` for frontend/UI work.
+8. Follow `.vorth/instructions/layers.md` when product/UX decisions are unclear.
+9. Follow `.vorth/instructions/caveman.md` only for compact subagent or handoff reports.
+10. Update `.vorth/context.md` after meaningful work.
+11. If `.vorth/vorth.config.md` enables the Agy Native Bridge, use it only for bounded execution tasks.
 <!-- VORTH:END -->
 ```
 
@@ -400,9 +464,12 @@ Before planning, coding, debugging, reviewing, or committing in this repo:
 2. Follow `.vorth/instructions/stack-routing.md`.
 3. Follow `.vorth/instructions/superpowers-ecc.md`.
 4. Follow `.vorth/instructions/codegraph.md` when CodeGraph is enabled.
-5. Follow `.vorth/instructions/impeccable.md` for frontend/UI work.
-6. Follow `.vorth/instructions/layers.md` when product/UX decisions are unclear.
-7. Update `.vorth/context.md` after meaningful work.
+5. Follow `.vorth/instructions/ponytail.md` before editing when Ponytail is enabled.
+6. Follow `.vorth/instructions/rtk.md` for noisy shell output when RTK is enabled or available.
+7. Follow `.vorth/instructions/impeccable.md` for frontend/UI work.
+8. Follow `.vorth/instructions/layers.md` when product/UX decisions are unclear.
+9. Follow `.vorth/instructions/caveman.md` only for compact subagent or handoff reports.
+10. Update `.vorth/context.md` after meaningful work.
 
 Codex loads AGENTS.md at session start. After `/vorth init`, restart Codex or open a new thread for automatic activation.
 
@@ -419,6 +486,9 @@ Superpowers owns process. ECC owns specialist review and targeted expertise.
 CodeGraph owns codebase-intelligence routing before broad exploration.
 Impeccable owns frontend/UI quality gates.
 Layers owns product/UX decision discovery.
+Ponytail owns complexity reduction before edits.
+RTK owns noisy command-output optimization.
+Caveman owns compact low-risk summaries.
 
 ## Workflow
 
@@ -470,6 +540,9 @@ Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
 - Do not let CodeGraph replace Superpowers or ECC.
 - Do not let Impeccable replace Layers for product decisions.
 - Do not let Layers become a ritual for every engineering task.
+- Do not let Ponytail override real correctness, security, accessibility, migration, API, or data-integrity needs.
+- Do not let RTK hide exact output when exact output matters.
+- Do not let Caveman make main analysis or risk communication ambiguous.
 ```
 
 ### Phase 10: Announce Result
@@ -486,6 +559,12 @@ CodeGraph: [enabled/disabled/skipped]
 CodeGraph CLI: [detected/missing/error]
 CodeGraph index: [present/missing]
 Git local exclude: [configured/missing/skipped]
+Ponytail: [full/disabled/skipped]
+Ponytail install: [installed/policy_only/disabled/skipped]
+RTK: [auto/enabled/disabled/skipped]
+RTK CLI: [detected/missing/error]
+Caveman: [subagent-only/disabled/skipped]
+Caveman install: [installed/policy_only/disabled/skipped]
 Impeccable: [auto/enabled/disabled/skipped]
 Impeccable install: [installed/recommended/not_required/missing/skipped]
 Layers: [advisory/enabled/disabled/skipped]
@@ -510,10 +589,14 @@ For `/vorth status`, inspect and report:
 - Git hygiene: whether `.git/info/exclude` contains Vorth's local system-folder ignore block.
 - Impeccable availability: config state, frontend detection, installed assets, `PRODUCT.md`, and `DESIGN.md`.
 - Layers availability: config state, vendor checkout, and core Layers skill files.
+- Ponytail availability: config state, policy, and installed skill assets if visible.
+- RTK availability: config state, CLI status, policy, and raw-output fallback mode.
+- Caveman availability: config state, policy, and installed skill assets if visible.
 - Agy Native Bridge availability: `.vorth/mcp/vorth-agy-native-bridge`, config flag, MCP registration, and `vorth_agy_status` if available.
 - The CLI status command must inspect user-level MCP config read-only and print a suggested registration snippet when missing.
 - Current `.vorth/context.md` summary.
 - Conditional stacks: Impeccable and Layers.
+- Guard stacks: Ponytail, RTK, and Caveman.
 - Deferred stacks: none.
 
 ## Reset Flow
@@ -522,7 +605,7 @@ For `/vorth reset`:
 
 1. Ask for confirmation.
 2. Remove only `.vorth/`, the Vorth managed blocks in `GEMINI.md` and `AGENTS.md`, and Vorth's managed local git exclude block.
-3. Do not uninstall ECC, Superpowers, Impeccable, `.agent/`, `.agents/`, `.codex/`, `.gemini/`, `PRODUCT.md`, `DESIGN.md`, or `.codegraph/` automatically. Those may be owned by their official installers or the user.
+3. Do not uninstall ECC, Superpowers, Impeccable, Ponytail, RTK, Caveman, `.agent/`, `.agents/`, `.codex/`, `.gemini/`, `PRODUCT.md`, `DESIGN.md`, or `.codegraph/` automatically. Those may be owned by their official installers or the user.
 4. If the user wants stack uninstall, point them to each stack's official uninstall/disable path.
 5. Do not remove user-level MCP registrations automatically. If Vorth added one, show the exact entry and ask before changing it.
 
@@ -541,10 +624,12 @@ For `/vorth reset`:
 2. Use CodeGraph first if the failing area is unclear or spans many files.
 3. Find root cause before fixing.
 4. Write or identify a failing test/reproduction.
-5. Fix narrowly.
-6. Call ECC `code-reviewer` for changed files when available.
-7. Call ECC `build-error-resolver` if build/test fails.
-8. Verify and update context.
+5. Apply Ponytail before editing so the fix stays narrow without hiding real risk.
+6. Fix narrowly.
+7. Call ECC `code-reviewer` for changed files when available.
+8. Call ECC `build-error-resolver` if build/test fails.
+9. Use RTK for noisy test/build output when available, with raw fallback when details matter.
+10. Verify and update context.
 
 ### Feature or Refactor
 
@@ -553,10 +638,13 @@ For `/vorth reset`:
 3. Use CodeGraph before broad codebase exploration or reading many files.
 4. Use Superpowers writing-plans for multi-step work.
 5. Ask for approval before executing a non-trivial plan.
-6. Execute with TDD.
-7. Use Impeccable if the feature touches frontend/UI.
-8. Use ECC specialists only at relevant gates.
-9. Verify and update context.
+6. Apply Ponytail before edits to keep the implementation minimal and readable.
+7. Execute with TDD.
+8. Use RTK for noisy command output when available.
+9. Use Impeccable if the feature touches frontend/UI.
+10. Use ECC specialists only at relevant gates.
+11. Use Caveman only for compact subagent/handoff summaries.
+12. Verify and update context.
 
 ## Non-Negotiables
 
@@ -564,8 +652,11 @@ For `/vorth reset`:
 - Do not silently install global/native plugins. Ask first and explain scope.
 - Prefer official ECC and Superpowers installers/plugins over copied snippets.
 - Prefer official Impeccable installer and official Layers repository over copied snippets.
-- Keep Superpowers as baseline, CodeGraph as codebase intelligence, ECC as specialist layer, Impeccable as UI quality gate, and Layers as product/UX decision gate.
+- Keep Superpowers as baseline, CodeGraph as codebase intelligence, ECC as specialist layer, Impeccable as UI quality gate, Layers as product/UX decision gate, Ponytail as complexity guard, RTK as output optimizer, and Caveman as compact-report mode.
 - Use CodeGraph before broad exploration or many-file reads, but skip it for obvious one-file changes.
+- Use Ponytail after context and before edits.
+- Use RTK only for noisy shell output, with raw fallback when details matter.
+- Use Caveman only for compact subagent, handoff, or low-risk status reports.
 - Use Impeccable only for frontend/UI quality work.
 - Use Layers only when product/UX decisions are unclear.
 - Preserve user files and unrelated changes.
