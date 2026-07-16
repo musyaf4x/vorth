@@ -165,6 +165,30 @@ test("legacy Markdown config migrates to authoritative JSON without losing choic
   assert.equal(config.rtk, "disabled");
 });
 
+test("legacy installed ECC state migrates through its minimal profile", (t) => {
+  const repo = createTempRepo(t);
+  fs.mkdirSync(path.join(repo, ".vorth"));
+  fs.writeFileSync(path.join(repo, ".vorth", "vorth.config.md"), [
+    "# Legacy Vorth Config",
+    "ecc_antigravity: installed",
+    "ecc_antigravity_profile: minimal",
+    "ecc_codex: skipped",
+    "agy_native_bridge: enabled",
+    "codegraph: disabled"
+  ].join("\n"), "utf8");
+
+  let result = runCli(["status", "--repo", repo, "--json"]);
+  assert.equal(result.status, 0, result.stdout || result.stderr);
+  assert.equal(JSON.parse(result.stdout).config.values.eccAntigravity, "minimal");
+
+  result = runCli(["init", "--repo", repo, "--json"]);
+  assert.equal(result.status, 0, result.stdout || result.stderr);
+  const config = readJson(path.join(repo, ".vorth", "vorth.config.json"));
+  assert.equal(config.eccAntigravity, "minimal");
+  assert.equal(config.eccCodex, "skipped");
+  assert.equal(config.bridge, "enabled");
+});
+
 test("dry-run and setup approval checks do not perform external installation", (t) => {
   const repo = createTempRepo(t);
   let result = runCli(["init", "--repo", repo, "--json", "--dry-run"]);
