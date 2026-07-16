@@ -60,7 +60,7 @@ Caveman owns compact low-risk summaries.
 
 ## Agy Native Bridge Execution
 
-Use this only in Antigravity and only when `.vorth/vorth.config.md` enables it.
+Use this only in Antigravity and only when `.vorth/vorth.config.json` enables `bridge`.
 
 - Delegate to `vorth_agy_delegate` or `vorth_flash_high_execute` only after the task is bounded.
 - Send complete task text, file scope, acceptance criteria, and verification command suggestions.

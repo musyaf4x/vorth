@@ -17,9 +17,9 @@ Impeccable is the frontend/UI design execution and quality gate. Use it only whe
 
 ## Install Boundary
 
-When `.vorth/vorth.config.md` sets `impeccable: auto`, treat Impeccable as a conditional policy and use installed Impeccable assets if present.
+When `.vorth/vorth.config.json` sets `impeccable` to `auto`, treat Impeccable as a conditional policy and use installed Impeccable assets if present.
 
-When `.vorth/vorth.config.md` sets `impeccable: enabled`, Vorth expects the official installer path:
+When `.vorth/vorth.config.json` sets `impeccable` to `enabled`, Vorth expects the official installer path:
 
 ```powershell
 npx --yes impeccable install --providers=gemini,codex --scope=project

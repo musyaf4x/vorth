@@ -29,9 +29,9 @@ Use the lightest useful layer:
 
 ## Install Boundary
 
-When `.vorth/vorth.config.md` sets `layers: advisory`, use this Vorth contract only.
+When `.vorth/vorth.config.json` sets `layers` to `advisory`, use this Vorth contract only.
 
-When `.vorth/vorth.config.md` sets `layers: enabled`, Vorth expects a project-local vendor checkout at:
+When `.vorth/vorth.config.json` sets `layers` to `enabled`, Vorth expects a project-local vendor checkout at:
 
 ```text
 .vorth/vendor/layers-skills/

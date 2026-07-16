@@ -4,15 +4,22 @@ import https from "node:https";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const SERVER_INFO = { name: "vorth-agy-native-bridge", version: "0.1.0" };
+const SERVER_INFO = { name: "vorth-agy-native-bridge", version: "0.2.0" };
 const META = { ideName: "antigravity", extensionName: "antigravity", locale: "en" };
 const FLASH_HIGH_ID = "gemini-3-flash-agent";
 const FLASH_HIGH_DISPLAY = "Gemini 3.5 Flash (High)";
-const FLASH_HIGH_MODEL = "MODEL_PLACEHOLDER_M132";
 const DEFAULT_TIMEOUT_MS = 90000;
 const MAX_TIMEOUT_MS = 300000;
+const MAX_FRAME_BYTES = 1024 * 1024;
+const MAX_HEADER_BYTES = 8192;
+const MAX_RPC_RESPONSE_BYTES = 10 * 1024 * 1024;
+const MAX_DIFF_BYTES = 1024 * 1024;
+const MAX_FALLBACK_RESPONSE_BYTES = 128 * 1024;
+const CASCADE_TTL_MS = 30 * 60 * 1000;
+const ALWAYS_FORBIDDEN = [".git/", ".vorth/", ".codegraph/"];
+const ownedCascades = new Map();
 const ALLOWED_MODES = new Set([
   "implementation",
   "build_fix",
@@ -57,7 +64,7 @@ const TOOLS = [
     description: "Read a previous Antigravity cascade result by cascadeId.",
     inputSchema: {
       type: "object",
-      required: ["cascadeId"],
+      required: ["cascadeId", "repoRoot"],
       properties: {
         cascadeId: { type: "string" },
         workspaceId: { type: "string" },
@@ -77,7 +84,7 @@ const TOOLS = [
 function delegationSchema() {
   return {
     type: "object",
-    required: ["repoRoot", "task"],
+    required: ["repoRoot", "task", "filesAllowed", "acceptanceCriteria"],
     properties: {
       repoRoot: { type: "string" },
       task: { type: "string" },
@@ -88,7 +95,6 @@ function delegationSchema() {
       modelPreference: { type: "string" },
       workspaceId: { type: "string" },
       userDataDir: { type: "string" },
-      workspaceUri: { type: "string" },
       filesAllowed: {
         type: "array",
         items: { type: "string" }
@@ -116,26 +122,45 @@ function delegationSchema() {
   };
 }
 
-if (process.argv.includes("--self-test")) {
-  const status = await toolStatus({});
-  const models = status.ready ? await toolModels({}) : null;
-  process.stdout.write(JSON.stringify({ status, flashHigh: models?.flashHigh ?? null }, null, 2));
-  process.stdout.write("\n");
-  process.exit(0);
+let inputBuffer = Buffer.alloc(0);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  if (process.argv.includes("--self-test")) {
+    const status = await toolStatus({});
+    const models = status.ready ? await toolModels({}) : null;
+    process.stdout.write(JSON.stringify({ status, flashHigh: models?.flashHigh ?? null }, null, 2));
+    process.stdout.write("\n");
+  } else {
+    startMcpServer();
+  }
 }
 
-let inputBuffer = Buffer.alloc(0);
-process.stdin.on("data", (chunk) => {
-  inputBuffer = Buffer.concat([inputBuffer, chunk]);
-  drainInput().catch((error) => {
-    process.stderr.write(`vorth-agy-native-bridge input error: ${safeErrorMessage(error)}\n`);
+function startMcpServer() {
+  process.stdin.on("data", (chunk) => {
+    inputBuffer = Buffer.concat([inputBuffer, chunk]);
+    if (inputBuffer.length > MAX_FRAME_BYTES + MAX_HEADER_BYTES) {
+      inputBuffer = Buffer.alloc(0);
+      process.stderr.write("vorth-agy-native-bridge input error: frame exceeds size limit\n");
+      return;
+    }
+    drainInput().catch((error) => {
+      process.stderr.write(`vorth-agy-native-bridge input error: ${safeErrorMessage(error)}\n`);
+    });
   });
-});
+}
 
 async function drainInput() {
   while (true) {
     const headerEnd = inputBuffer.indexOf("\r\n\r\n");
-    if (headerEnd === -1) return;
+    if (headerEnd === -1) {
+      if (inputBuffer.length > MAX_HEADER_BYTES) inputBuffer = Buffer.alloc(0);
+      return;
+    }
+    if (headerEnd > MAX_HEADER_BYTES) {
+      inputBuffer = inputBuffer.subarray(headerEnd + 4);
+      continue;
+    }
 
     const header = inputBuffer.subarray(0, headerEnd).toString("utf8");
     const lengthMatch = header.match(/Content-Length:\s*(\d+)/i);
@@ -145,6 +170,16 @@ async function drainInput() {
     }
 
     const length = Number(lengthMatch[1]);
+    if (!Number.isSafeInteger(length) || length < 0 || length > MAX_FRAME_BYTES) {
+      inputBuffer = Buffer.alloc(0);
+      writeMessage({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32600, message: "MCP frame exceeds the bridge size limit." }
+      });
+      process.stdin.destroy();
+      return;
+    }
     const messageEnd = headerEnd + 4 + length;
     if (inputBuffer.length < messageEnd) return;
 
@@ -241,9 +276,8 @@ async function callTool(name, args) {
 async function toolStatus(args) {
   const discovered = discoverLanguageServers(args);
   const candidates = discovered.map(publicServerInfo);
-  const selected = selectLanguageServer(args, false);
+  const selected = chooseLanguageServer(discovered, args, false);
   let heartbeat = null;
-  let userStatus = null;
 
   if (selected) {
     try {
@@ -253,16 +287,6 @@ async function toolStatus(args) {
       heartbeat = { ok: false, message: safeErrorMessage(error) };
     }
 
-    try {
-      const userStatusResponse = await rpc(selected, "GetUserStatus", { metadata: META }, 5000);
-      userStatus = {
-        ok: true,
-        status: userStatusResponse.status,
-        topKeys: Object.keys(userStatusResponse.body || {})
-      };
-    } catch (error) {
-      userStatus = { ok: false, message: safeErrorMessage(error) };
-    }
   }
 
   return {
@@ -272,8 +296,7 @@ async function toolStatus(args) {
     usableLanguageServerCount: discovered.filter((item) => item.httpsPort && item.csrfToken).length,
     selected: selected ? publicServerInfo(selected) : null,
     candidates,
-    heartbeat,
-    userStatus
+    heartbeat
   };
 }
 
@@ -317,13 +340,15 @@ async function toolDelegate(args) {
 
   const repoCheck = validateRepoRoot(args.repoRoot);
   if (!repoCheck.ok) return repoCheck.result;
+  const scopeCheck = validateDelegationScope(repoCheck.root, mode, args);
+  if (!scopeCheck.ok) return scopeCheck.result;
 
   const selected = requireLanguageServer(args);
   const { models } = await getModels(selected);
   const resolvedModel = resolveModel(args.modelPreference || "flash-high", models);
   const cascadeId = args.cascadeId || randomUUID();
   const timeoutMs = clampTimeout(args.timeoutMs);
-  const workspaceUri = args.workspaceUri || pathToFileURL(repoCheck.root).href;
+  const workspaceUri = pathToFileURL(repoCheck.root).href;
   const cascadeConfig = {
     planner_config: {
       requested_model: { model: resolvedModel.model },
@@ -340,7 +365,19 @@ async function toolDelegate(args) {
     cascade_config: cascadeConfig
   }, 15000);
 
-  const prompt = buildDelegationPrompt(args, mode, resolvedModel);
+  const ownership = {
+    repoRoot: repoCheck.root,
+    serverKey: languageServerKey(selected),
+    filesAllowed: scopeCheck.filesAllowed,
+    filesForbidden: scopeCheck.filesForbidden,
+    createdAt: Date.now()
+  };
+  const prompt = buildDelegationPrompt({
+    ...args,
+    filesAllowed: scopeCheck.filesAllowed,
+    filesForbidden: scopeCheck.filesForbidden,
+    acceptanceCriteria: scopeCheck.acceptanceCriteria
+  }, mode, resolvedModel);
   await rpc(selected, "SendUserCascadeMessage", {
     metadata: META,
     cascade_id: cascadeId,
@@ -350,18 +387,15 @@ async function toolDelegate(args) {
     tags: ["vorth", "vorth-agy-native-bridge", mode, ...toStringArray(args.tags)],
     cascade_config: cascadeConfig
   }, 15000);
+  pruneOwnedCascades();
+  ownedCascades.set(cascadeId, ownership);
 
   await waitForIdleBestEffort(selected, cascadeId);
   const result = await readCascadeResult(selected, cascadeId, timeoutMs);
-  return formatDelegateResult(result, cascadeId, resolvedModel, args);
+  return enforceResultScope(formatDelegateResult(result, cascadeId, resolvedModel, args), ownership);
 }
 
 async function toolReadResult(args) {
-  if (args.repoRoot) {
-    const repoCheck = validateRepoRoot(args.repoRoot);
-    if (!repoCheck.ok) return repoCheck.result;
-  }
-
   if (!args.cascadeId) {
     return {
       status: "needs_context",
@@ -370,9 +404,30 @@ async function toolReadResult(args) {
     };
   }
 
+  const repoCheck = validateRepoRoot(args.repoRoot);
+  if (!repoCheck.ok) return repoCheck.result;
+  pruneOwnedCascades();
+  const ownership = ownedCascades.get(String(args.cascadeId));
+  if (!ownership || !samePath(ownership.repoRoot, repoCheck.root)) {
+    return {
+      status: "refused",
+      summary: "This bridge process does not own that cascade for the requested repository.",
+      risks: ["Cross-repository and pre-restart cascade reads are blocked."],
+      questions: ["Delegate the task again from this repository if the bridge was restarted."]
+    };
+  }
+
   const selected = requireLanguageServer(args);
+  if (ownership.serverKey !== languageServerKey(selected)) {
+    return {
+      status: "refused",
+      summary: "The cascade belongs to a different Antigravity workspace session.",
+      risks: ["Reading from another OAuth/workspace session is blocked."],
+      questions: ["Select the original workspaceId or delegate the task again."]
+    };
+  }
   const result = await readCascadeResult(selected, args.cascadeId, 5000);
-  return formatReadResult(result, args.cascadeId);
+  return enforceResultScope(formatReadResult(result, args.cascadeId), ownership);
 }
 
 function discoverLanguageServers(args = {}) {
@@ -459,18 +514,25 @@ function collectSelfRelated(rows) {
 }
 
 function selectLanguageServer(args = {}, throwIfMissing = true) {
-  const discovered = discoverLanguageServers();
+  const discovered = discoverLanguageServers(args);
+  return chooseLanguageServer(discovered, args, throwIfMissing);
+}
+
+export function chooseLanguageServer(discovered, args = {}, throwIfMissing = true) {
   let usable = discovered.filter((item) => item.httpsPort && item.csrfToken);
   if (args.workspaceId) {
     usable = usable.filter((item) => item.workspaceId === args.workspaceId);
   }
 
-  const selected = usable[0] || null;
-  if (!selected && throwIfMissing) {
+  if (!usable.length && throwIfMissing) {
     throw new Error("No usable Antigravity workspace language server found. Open the target repository in Antigravity and wait for the agent panel to initialize.");
   }
+  if (usable.length > 1 && !args.workspaceId) {
+    if (!throwIfMissing) return null;
+    throw new Error(`Multiple usable Antigravity workspace sessions were found. Pass workspaceId explicitly: ${usable.map((item) => item.workspaceId || `pid-${item.pid}`).join(", ")}`);
+  }
 
-  return selected;
+  return usable[0] || null;
 }
 
 function requireLanguageServer(args = {}) {
@@ -506,11 +568,20 @@ function rpc(server, method, body, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const request = https.request(options, (response) => {
       let responseText = "";
+      let responseBytes = 0;
+      let settled = false;
       response.setEncoding("utf8");
       response.on("data", (chunk) => {
+        responseBytes += Buffer.byteLength(chunk, "utf8");
+        if (responseBytes > MAX_RPC_RESPONSE_BYTES) {
+          settled = true;
+          request.destroy(new Error(`Antigravity RPC ${method} response exceeded ${MAX_RPC_RESPONSE_BYTES} bytes`));
+          return;
+        }
         responseText += chunk;
       });
       response.on("end", () => {
+        if (settled) return;
         let parsed = {};
         try {
           parsed = responseText ? JSON.parse(responseText) : {};
@@ -562,33 +633,39 @@ async function getModels(server) {
   };
 }
 
-function resolveModel(preference, models) {
+export function resolveModel(preference, models) {
   const normalized = String(preference || "flash-high").toLowerCase();
 
   if (String(preference || "").startsWith("MODEL_")) {
     const found = models.find((model) => model.model === preference);
-    return found || { id: String(preference), displayName: String(preference), model: String(preference) };
+    if (!found) throw new Error(`Requested runtime model is not available: ${preference}`);
+    return requireRoutableModel(found);
   }
 
   if (["flash-high", "gemini-3.5-flash-high", "gemini-3-flash-agent"].includes(normalized)) {
-    return (
+    const found = (
       models.find((model) => model.id === FLASH_HIGH_ID) ||
-      models.find((model) => model.displayName === FLASH_HIGH_DISPLAY) ||
-      models.find((model) => model.model === FLASH_HIGH_MODEL) ||
-      { id: FLASH_HIGH_ID, displayName: FLASH_HIGH_DISPLAY, model: FLASH_HIGH_MODEL }
+      models.find((model) => String(model.displayName || "").toLowerCase() === FLASH_HIGH_DISPLAY.toLowerCase())
     );
+    if (!found) throw new Error(`${FLASH_HIGH_DISPLAY} is not available in the selected Antigravity account/session.`);
+    return requireRoutableModel(found);
   }
 
   const byId = models.find((model) => model.id === preference);
-  if (byId) return byId;
+  if (byId) return requireRoutableModel(byId);
 
   const byDisplay = models.find((model) => String(model.displayName || "").toLowerCase() === normalized);
-  if (byDisplay) return byDisplay;
+  if (byDisplay) return requireRoutableModel(byDisplay);
 
   throw new Error(`Model preference not found: ${preference}`);
 }
 
-function validateRepoRoot(repoRoot) {
+function requireRoutableModel(model) {
+  if (!model?.model) throw new Error(`Antigravity model ${model?.displayName || model?.id || "unknown"} has no runtime model enum.`);
+  return model;
+}
+
+export function validateRepoRoot(repoRoot) {
   if (!repoRoot) {
     return {
       ok: false,
@@ -601,33 +678,194 @@ function validateRepoRoot(repoRoot) {
   }
 
   const root = path.resolve(String(repoRoot));
-  const configPath = path.join(root, ".vorth", "vorth.config.md");
+  const configPath = path.join(root, ".vorth", "vorth.config.json");
   if (!fs.existsSync(configPath)) {
     return {
       ok: false,
       result: {
         status: "refused",
         summary: "Repository is not Vorth-enabled.",
-        risks: ["Missing .vorth/vorth.config.md."],
+        risks: ["Missing .vorth/vorth.config.json."],
         questions: ["Run /vorth init in this repository first."]
       }
     };
   }
 
-  const configText = fs.readFileSync(configPath, "utf8");
-  if (!/(agy_native_bridge|agy_flash_high_executor)\s*:\s*enabled/i.test(configText)) {
+  let config;
+  try {
+    config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  } catch {
+    return {
+      ok: false,
+      result: {
+        status: "refused",
+        summary: "Vorth configuration is unreadable.",
+        risks: ["The bridge cannot verify repository opt-in."],
+        questions: ["Run vorth sync or repair .vorth/vorth.config.json."]
+      }
+    };
+  }
+  if (config.bridge !== "enabled") {
     return {
       ok: false,
       result: {
         status: "refused",
         summary: "Agy native bridge is not enabled for this repository.",
         risks: ["The bridge only accepts delegation from opted-in repositories."],
-        questions: ["Set agy_native_bridge: enabled in .vorth/vorth.config.md after user approval."]
+        questions: ["Run vorth init --bridge enabled after user approval."]
       }
     };
   }
 
   return { ok: true, root, configPath };
+}
+
+export function validateDelegationScope(repoRoot, mode, args = {}) {
+  const filesAllowed = toStringArray(args.filesAllowed);
+  const acceptanceCriteria = toStringArray(args.acceptanceCriteria)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!filesAllowed.length) {
+    return scopeRefusal("Delegation requires at least one allowed file or directory.");
+  }
+  if (!acceptanceCriteria.length) {
+    return scopeRefusal("Delegation requires at least one acceptance criterion.");
+  }
+  if (filesAllowed.length > 100 || acceptanceCriteria.length > 100) {
+    return scopeRefusal("Delegation scope exceeds the bridge item limit of 100.");
+  }
+
+  try {
+    const normalizedAllowed = filesAllowed.map((item) => normalizeScopePath(repoRoot, item, true));
+    const normalizedForbidden = [
+      ...ALWAYS_FORBIDDEN,
+      ...toStringArray(args.filesForbidden).map((item) => normalizeScopePath(repoRoot, item, true))
+    ];
+    if (normalizedAllowed.some((allowed) => ALWAYS_FORBIDDEN.some((blocked) => matchesScope(allowed, blocked)))) {
+      return scopeRefusal("Vorth runtime, CodeGraph index, and Git metadata cannot be delegated.");
+    }
+    return {
+      ok: true,
+      mode,
+      filesAllowed: [...new Set(normalizedAllowed)],
+      filesForbidden: [...new Set(normalizedForbidden)],
+      acceptanceCriteria
+    };
+  } catch (error) {
+    return scopeRefusal(safeErrorMessage(error));
+  }
+}
+
+function scopeRefusal(summary) {
+  return {
+    ok: false,
+    result: {
+      status: "needs_context",
+      summary,
+      risks: ["The bridge executes only repository-relative, explicitly bounded work."],
+      questions: ["Provide allowed files/directories and concrete acceptance criteria."]
+    }
+  };
+}
+
+function normalizeScopePath(repoRoot, value, allowDirectory) {
+  const raw = String(value || "").trim().replaceAll("\\", "/");
+  const directory = allowDirectory && raw.endsWith("/");
+  if (!raw || raw.includes("\0") || path.posix.isAbsolute(raw) || path.win32.isAbsolute(raw) || /^file:/i.test(raw)) {
+    throw new Error(`Scope path must be repository-relative: ${raw || "<empty>"}`);
+  }
+  const normalized = path.posix.normalize(raw.replace(/^\.\//, ""));
+  if (normalized === "." || normalized === ".." || normalized.startsWith("../")) {
+    throw new Error(`Scope path escapes the repository: ${raw}`);
+  }
+  const resolved = path.resolve(repoRoot, ...normalized.split("/"));
+  if (!isInside(repoRoot, resolved)) throw new Error(`Scope path escapes the repository: ${raw}`);
+  return directory ? `${normalized.replace(/\/$/, "")}/` : normalized;
+}
+
+export function validateUnifiedDiff(unifiedDiff, ownership) {
+  const diff = String(unifiedDiff || "");
+  if (!diff.trim()) return { ok: true, files: [] };
+  if (Buffer.byteLength(diff, "utf8") > MAX_DIFF_BYTES) {
+    return { ok: false, reason: `Patch exceeds ${MAX_DIFF_BYTES} bytes.` };
+  }
+
+  const files = new Set();
+  try {
+    for (const line of diff.split(/\r?\n/)) {
+      if (line.startsWith("diff --git ")) {
+        const match = line.match(/^diff --git a\/(\S+) b\/(\S+)$/);
+        if (!match) throw new Error("Patch contains an unsupported or ambiguous diff header.");
+        files.add(normalizePatchPath(ownership.repoRoot, match[1]));
+        files.add(normalizePatchPath(ownership.repoRoot, match[2]));
+      } else if (line.startsWith("--- ") || line.startsWith("+++ ")) {
+        const raw = line.slice(4).split("\t", 1)[0].trim();
+        if (raw === "/dev/null") continue;
+        if (!/^[ab]\//.test(raw)) throw new Error("Patch contains a file header outside the repository diff format.");
+        files.add(normalizePatchPath(ownership.repoRoot, raw.slice(2)));
+      }
+    }
+  } catch (error) {
+    return { ok: false, reason: safeErrorMessage(error) };
+  }
+
+  if (!files.size) return { ok: false, reason: "Patch contains no verifiable repository file paths." };
+  for (const file of files) {
+    if (!ownership.filesAllowed.some((allowed) => matchesScope(file, allowed))) {
+      return { ok: false, reason: `Patch touches a file outside filesAllowed: ${file}` };
+    }
+    if ([...ALWAYS_FORBIDDEN, ...ownership.filesForbidden].some((forbidden) => matchesScope(file, forbidden))) {
+      return { ok: false, reason: `Patch touches a forbidden file: ${file}` };
+    }
+  }
+  return { ok: true, files: [...files] };
+}
+
+function normalizePatchPath(repoRoot, value) {
+  const normalized = normalizeScopePath(repoRoot, value, false);
+  if (normalized.endsWith("/")) throw new Error(`Patch path must identify a file: ${value}`);
+  return normalized;
+}
+
+function matchesScope(file, scope) {
+  const normalizedFile = String(file).replaceAll("\\", "/");
+  const normalizedScope = String(scope).replaceAll("\\", "/");
+  return normalizedScope.endsWith("/")
+    ? normalizedFile.startsWith(normalizedScope)
+    : normalizedFile === normalizedScope;
+}
+
+function enforceResultScope(result, ownership) {
+  const validation = validateUnifiedDiff(result.unifiedDiff, ownership);
+  if (validation.ok) return { ...result, filesTouched: validation.files };
+  return {
+    ...result,
+    status: "refused",
+    summary: "Antigravity returned a patch outside the delegated scope.",
+    response: "",
+    unifiedDiff: "",
+    risks: [...toStringArray(result.risks), validation.reason]
+  };
+}
+
+function languageServerKey(server) {
+  return [server.pid, server.workspaceId || "", server.httpsPort].join(":");
+}
+
+function pruneOwnedCascades() {
+  const cutoff = Date.now() - CASCADE_TTL_MS;
+  for (const [cascadeId, ownership] of ownedCascades) {
+    if (ownership.createdAt < cutoff) ownedCascades.delete(cascadeId);
+  }
+}
+
+function isInside(root, target) {
+  const relative = path.relative(path.resolve(root), path.resolve(target));
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function samePath(left, right) {
+  return path.resolve(String(left)).toLowerCase() === path.resolve(String(right)).toLowerCase();
 }
 
 function buildDelegationPrompt(args, mode, resolvedModel) {
@@ -733,7 +971,7 @@ function formatDelegateResult(result, cascadeId, model, args) {
     cascadeId,
     model: safeModel(model),
     summary: parsed?.summary || "Antigravity planner response received.",
-    response,
+    response: parsed ? "" : response.slice(0, MAX_FALLBACK_RESPONSE_BYTES),
     unifiedDiff,
     commandsSuggested: toStringArray(parsed?.commandsSuggested).length
       ? toStringArray(parsed.commandsSuggested)
@@ -760,7 +998,7 @@ function formatReadResult(result, cascadeId) {
     status: parsed?.status || "ok",
     cascadeId,
     summary: parsed?.summary || "Antigravity planner response received.",
-    response,
+    response: parsed ? "" : response.slice(0, MAX_FALLBACK_RESPONSE_BYTES),
     unifiedDiff: valueAsString(parsed?.unifiedDiff || parsed?.diff) || extractDiff(response),
     commandsSuggested: toStringArray(parsed?.commandsSuggested),
     risks: toStringArray(parsed?.risks),

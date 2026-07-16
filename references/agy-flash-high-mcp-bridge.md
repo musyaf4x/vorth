@@ -38,22 +38,17 @@ Never print, log, store, or return command lines, CSRF tokens, OAuth tokens, coo
 
 Resolve Gemini 3.5 Flash High dynamically from `GetAvailableModels`.
 
-Preferred runtime mapping:
+Match the live entry by id or display name:
 
 ```yaml
 id: gemini-3-flash-agent
 displayName: Gemini 3.5 Flash (High)
-model: MODEL_PLACEHOLDER_M132
-thinkingBudget: 10000
+model: <exact enum returned by the selected Antigravity session>
 ```
 
-Known fallback:
-
-```yaml
-model: MODEL_PLACEHOLDER_M132
-```
-
-Do not invent a separate model id such as `gemini-3.5-flash-high`.
+There is no hardcoded enum fallback. Refuse delegation if the selected session
+does not return Flash High or its entry has no routable `model` enum. Do not
+invent a separate model id such as `gemini-3.5-flash-high`.
 
 ## MCP Server Shape
 
@@ -102,17 +97,10 @@ Expose these tools:
 }
 ```
 
-The server must reject delegation unless `repoRoot` contains `.vorth/vorth.config.md` with either:
-
-```yaml
-agy_native_bridge: enabled
-```
-
-or the backward-compatible flag:
-
-```yaml
-agy_flash_high_executor: enabled
-```
+The server must reject delegation unless `repoRoot` contains the authoritative
+`.vorth/vorth.config.json` with `"bridge": "enabled"`. It must derive the
+workspace URI from this validated root and ignore caller-supplied workspace paths.
+`filesAllowed` and `acceptanceCriteria` are mandatory.
 
 ## Delegation Output
 
@@ -125,10 +113,10 @@ The bridge returns structured text JSON:
   "model": {
     "id": "gemini-3-flash-agent",
     "displayName": "Gemini 3.5 Flash (High)",
-    "model": "MODEL_PLACEHOLDER_M132"
+    "model": "<exact runtime enum>"
   },
   "summary": "short result summary",
-  "response": "raw planner response",
+  "response": "bounded fallback text only when structured parsing fails",
   "unifiedDiff": "patch text or empty string",
   "commandsSuggested": ["commands the main agent may run"],
   "risks": ["remaining risk"],
@@ -137,6 +125,10 @@ The bridge returns structured text JSON:
 ```
 
 Default to patch output instead of direct writes. The main Agy agent applies the patch, runs checks, and decides whether more work is needed.
+The bridge validates every returned diff path against `filesAllowed`,
+`filesForbidden`, and built-in exclusions for `.git/`, `.vorth/`, and
+`.codegraph/`. A cascade result may be read only by the same bridge process,
+repository, and Antigravity workspace session that created it.
 
 ## Allowed Calls
 
@@ -195,12 +187,15 @@ Suggested MCP registration shape:
 For a second Antigravity account, use a separate user-data-dir instead of logging the active IDE out:
 
 ```powershell
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext --workspace .
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status --user-data-dir C:\tmp\vorth-agy-worker
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --workspace .
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status
 ```
 
-The worker profile must be logged in once interactively. After login, it must expose a workspace HTTPS language server before the bridge can use it for delegation.
+The helper defaults to OS temporary directories and discovers the Antigravity
+CLI through environment, standard LocalAppData, or PATH. The worker profile must
+be logged in once interactively. Readiness requires a workspace language server
+with both HTTPS and CSRF arguments.
 
 ## Prompt Contract
 
@@ -236,6 +231,6 @@ Return `refused` when the task is outside allowed scope.
 Return `error` when the Antigravity RPC call or local preflight fails.
 Do not silently fall back to another model.
 
-## Remaining Hardening
+## Residual Boundary
 
 The direct MCP server reads the Antigravity process command line internally to discover the localhost CSRF token. It must never print that value. A future companion extension can move this discovery inside Antigravity's extension host so the MCP server never touches process command lines.

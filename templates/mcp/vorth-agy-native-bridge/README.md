@@ -18,7 +18,13 @@ Run this after copying the template into a Vorth-enabled project:
 node .\.vorth\mcp\vorth-agy-native-bridge\server.mjs --self-test
 ```
 
-The test prints safe readiness/model metadata only. It must not print Antigravity command lines, CSRF tokens, OAuth tokens, cookies, or user status values.
+The test prints safe readiness/model metadata only. It does not call the user-status RPC and must not print Antigravity command lines, CSRF tokens, OAuth tokens, or cookies.
+
+Delegation requires an absolute Vorth-enabled `repoRoot`, repository-relative
+`filesAllowed`, and explicit `acceptanceCriteria`. When multiple usable
+Antigravity sessions exist, pass `workspaceId`; the bridge refuses to guess.
+Returned patches are validated against the delegated file scope before they are
+returned to the main agent.
 
 ## MCP Registration
 
@@ -42,9 +48,12 @@ Suggested entry:
 Use a worker profile only after the active-profile bridge works.
 
 ```powershell
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext --workspace .
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status --user-data-dir C:\tmp\vorth-agy-worker
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --workspace .
+node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status
 ```
 
-The worker must be logged in interactively once before it can provide a usable workspace language server.
+The helper defaults to OS temporary directories and discovers the Antigravity IDE
+CLI from `ANTIGRAVITY_IDE_CLI`, its standard LocalAppData location, or `PATH`.
+The worker must be logged in interactively once; readiness requires a language
+server exposing both HTTPS and CSRF runtime arguments.

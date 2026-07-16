@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const DEFAULT_USER_DATA_DIR = "C:\\tmp\\vorth-agy-worker";
-const DEFAULT_EXTENSIONS_DIR = "C:\\tmp\\vorth-agy-worker-ext";
-const DEFAULT_ANTIGRAVITY_CLI = "C:\\Users\\hafid\\AppData\\Local\\Programs\\Antigravity IDE\\bin\\antigravity-ide.cmd";
+const DEFAULT_USER_DATA_DIR = path.join(os.tmpdir(), "vorth-agy-worker");
+const DEFAULT_EXTENSIONS_DIR = path.join(os.tmpdir(), "vorth-agy-worker-ext");
 
 const command = process.argv[2] || "help";
 const options = parseOptions(process.argv.slice(3));
@@ -48,7 +48,7 @@ function cmdInit(options) {
 }
 
 function cmdLaunch(options, hidden) {
-  const antigravityCli = resolveCli(options.antigravityCli || process.env.ANTIGRAVITY_IDE_CLI || DEFAULT_ANTIGRAVITY_CLI);
+  const antigravityCli = resolveCli(options.antigravityCli || process.env.ANTIGRAVITY_IDE_CLI);
   const userDataDir = resolvePath(options.userDataDir || process.env.VORTH_AGY_USER_DATA_DIR || DEFAULT_USER_DATA_DIR);
   const extensionsDir = resolvePath(options.extensionsDir || process.env.VORTH_AGY_EXTENSIONS_DIR || DEFAULT_EXTENSIONS_DIR);
   const workspace = resolvePath(options.workspace || process.cwd());
@@ -93,6 +93,7 @@ function cmdStatus(options) {
         parentPid: row.ParentProcessId,
         workspaceId: getArg(commandLine, "workspace_id") || null,
         hasHttps: Boolean(getArg(commandLine, "https_server_port")),
+        hasCsrf: Boolean(getArg(commandLine, "csrf_token")),
         hasExtensionPort: Boolean(getArg(commandLine, "extension_server_port"))
       };
     });
@@ -102,7 +103,7 @@ function cmdStatus(options) {
     userDataDir,
     workerProcessCount: descendants.size,
     languageServers,
-    ready: languageServers.some((server) => server.hasHttps)
+    ready: languageServers.some((server) => server.hasHttps && server.hasCsrf)
   });
 }
 
@@ -144,8 +145,27 @@ function resolvePath(value) {
 }
 
 function resolveCli(value) {
-  if (fs.existsSync(value)) return value;
-  return value;
+  const candidates = [
+    value,
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Programs", "Antigravity IDE", "bin", "antigravity-ide.cmd"),
+    "antigravity-ide.cmd",
+    "antigravity.cmd",
+    "agy.cmd"
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (path.isAbsolute(candidate) && fs.existsSync(candidate)) return candidate;
+    try {
+      const found = execFileSync("where.exe", [candidate], {
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"]
+      }).split(/\r?\n/).map((item) => item.trim()).find(Boolean);
+      if (found) return found;
+    } catch {
+      // Try the next official CLI location/name.
+    }
+  }
+  throw new Error("Antigravity IDE CLI was not found. Pass --antigravity-cli or set ANTIGRAVITY_IDE_CLI.");
 }
 
 function runPowerShell(script) {

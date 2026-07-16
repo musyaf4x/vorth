@@ -9,7 +9,7 @@ This repository is Vorth-enabled.
 - ECC is the specialist layer.
 - Impeccable is the frontend/UI quality gate when configured.
 - Layers is the product/UX decision gate when configured.
-- Agy Native Bridge is configured by `.vorth/vorth.config.md`.
+- Agy Native Bridge is configured by `.vorth/vorth.config.json`.
 - No stack is globally active unless Vorth routing selects it for the current task.
 
 ## Notes

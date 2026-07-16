@@ -1,369 +1,224 @@
 # Vorth
 
-Vorth is a project-local engineering harness for Antigravity and Codex.
+Vorth is a project-local engineering harness for Antigravity and Codex. It does
+not replace the underlying stacks; it activates them per repository, routes each
+one to a narrow role, and reports when an official runtime is missing.
 
-Current focus: **Superpowers + CodeGraph + ECC + conditional Impeccable/Layers + Ponytail/RTK/Caveman guard layers**.
+Version 0.3 separates cheap project activation from external installation. A
+normal init is one deterministic CLI call, not an agent-led sequence of template
+reads and installer decisions.
 
-- **Superpowers** is the baseline workflow: clarify, plan, TDD, execute, review, verify.
-- **CodeGraph** is the codebase intelligence layer: query it before broad exploration or reading many files.
-- **ECC** is the specialist layer: planner, architect, TDD guide, code reviewer, security reviewer, build resolver, and language reviewers.
-- **Impeccable** is the frontend/UI quality gate when a task touches visible product experience.
-- **Layers** is the product/UX decision-discovery gate when intent, flow, or conceptual model is unclear.
-- **Ponytail** is the complexity guard: apply it after context and before edit to avoid unnecessary abstraction, dependencies, or scope growth.
-- **RTK** is the command-output optimizer for noisy shell output when its CLI is available.
-- **Caveman** is compact-report mode for subagent and handoff summaries, not the main conversation style.
-- **Agy Native Bridge** is an optional Antigravity-only execution adapter for bounded tasks through Antigravity's own OAuth/session, not a Gemini API key.
+## Stack Map
 
-Impeccable and Layers are conditional stacks, not always-on rituals. Ponytail, RTK, and Caveman are guard layers with narrow routing rules.
-
-## Why This Shape
-
-The clean architecture is:
-
-```text
-Vorth = project-local activation and memory
-Superpowers = process controller
-CodeGraph = codebase intelligence layer
-ECC = specialist engineering pool
-Impeccable = frontend/UI quality gate
-Layers = product/UX decision-discovery gate
-Ponytail = complexity guard before edit
-RTK = command-output optimization layer
-Caveman = compact-report mode
-Agy Native Bridge = bounded Antigravity execution adapter
-Antigravity/Codex = harness adapters
-```
-
-Vorth should not replace Superpowers or ECC internals. It should activate them, respect their official install structures, and decide when each one participates.
-
-## Activation Model
-
-Vorth stays opt-in per repository. A repository becomes Vorth-enabled only after:
-
-```text
-/vorth init
-```
-
-The executable equivalent is:
-
-```powershell
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge disabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
-node <vorth-skill>\bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
-```
-
-Init writes project-local activation files:
-
-```text
-.vorth/
-  vorth.config.md
-  context.md
-  instructions/
-    stack-routing.md
-    codegraph.md
-    impeccable.md
-    layers.md
-    ponytail.md
-    rtk.md
-    caveman.md
-    superpowers-ecc.md
-    turn-process.md
-  plans/
-  mcp/
-    vorth-agy-native-bridge/     # optional, Agy only
-GEMINI.md   # Antigravity adapter block
-AGENTS.md   # Codex adapter block
-```
-
-`GEMINI.md` and `AGENTS.md` contain managed `VORTH:START` / `VORTH:END` blocks that tell the agent to read `.vorth/context.md`, follow `.vorth/instructions/stack-routing.md`, and then apply only the stack instructions relevant to the task.
-
-Vorth also writes a local Git exclude block to `.git/info/exclude` when the target is a Git repository. This keeps local system folders out of commits without changing project `.gitignore`:
-
-```text
-.vorth/
-.codegraph/
-.agent/
-.agents/
-.codex/
-.gemini/
-```
-
-## CodeGraph
-
-Vorth treats CodeGraph as an active project-local intelligence layer, not as the process controller.
-
-When `--codegraph enabled` is selected, `vorth init` checks for the `codegraph` CLI and runs this in the target repository:
-
-```powershell
-codegraph init
-```
-
-That creates the project `.codegraph/` index using CodeGraph's own tooling. If the CLI is missing, Vorth still writes `.vorth/` and the managed activation blocks, then reports the official install options from [colbymchenry/codegraph](https://github.com/colbymchenry/codegraph).
-
-Vorth does not silently run remote installers, `npm i -g`, or global agent wiring. Agent MCP wiring belongs to CodeGraph's own command:
-
-```powershell
-codegraph install
-```
-
-The operating rule is:
-
-- Before broad codebase exploration, use CodeGraph first.
-- Before reading many files, query CodeGraph first.
-- For small changes where the target file is already clear, skip CodeGraph.
-- If CodeGraph is unavailable or stale, fall back to narrow `rg` and targeted file reads.
-
-CodeGraph telemetry follows its official policy. See [TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md) for opt-out options.
-
-## Ponytail
-
-Vorth treats [Ponytail](https://github.com/DietrichGebert/ponytail) as a complexity guard. It is active by default as project-local policy:
-
-```yaml
-ponytail: full
-ponytail_policy: after-context-before-edit
-ponytail_ultra: explicit-only
-ponytail_safety_override: enabled
-```
-
-Use Ponytail after CodeGraph/Superpowers have gathered enough context and before editing code. It should prefer reuse, standard library/native platform features, existing dependencies, and the smallest readable diff. Do not let Ponytail reduce security, correctness, migrations, public API compatibility, accessibility, or data integrity.
-
-Vorth does not install Ponytail globally. If official Ponytail skill assets already exist in the project, `status` reports them; otherwise Vorth applies the project-local policy instruction.
-
-## RTK
-
-Vorth treats [RTK](https://github.com/rtk-ai/rtk) as an optional command-output optimization layer.
-
-Default mode is:
-
-```yaml
-rtk: auto
-rtk_policy: compress-noisy-shell-output
-rtk_raw_fallback: on-failure-or-ambiguity
-rtk_exact_output_bypass: enabled
-```
-
-Use RTK when available for noisy command output such as large diffs, broad searches, test/lint/build output, and logs. Bypass it for exact raw output, JSON that must be consumed downstream, auth-sensitive commands, interactive commands, destructive operations, or ambiguous compressed output.
-
-Vorth only detects the `rtk` CLI. It does not install RTK globally.
-
-## Caveman
-
-Vorth treats [Caveman](https://github.com/juliusbrussee/caveman) as compact-report mode.
-
-Default mode is:
-
-```yaml
-caveman: subagent-only
-caveman_policy: compact-reports-not-main-dialog
-caveman_autoclarity: enabled
-caveman_memory_compress: explicit-only
-```
-
-Use Caveman only for low-risk subagent summaries, handoff notes, or short status reports. Do not use it for main analysis, architecture/product reasoning, security warnings, irreversible actions, or multi-step instructions that need clarity.
-
-## Impeccable
-
-Vorth treats [Impeccable](https://github.com/pbakaus/impeccable) as the frontend/UI quality gate. It is conditional: Vorth routes to it only when work touches visible product experience.
-
-Default mode is:
-
-```yaml
-impeccable: auto
-```
-
-In `auto`, Vorth detects frontend evidence and installed Impeccable assets, then reports whether Impeccable is recommended. It does not run network installers automatically.
-
-When the user explicitly selects `--impeccable enabled`, Vorth uses Impeccable's official installer path:
-
-```powershell
-npx --yes impeccable install --providers=gemini,codex --scope=project
-```
-
-Use Impeccable for UI creation, critique, audit, polish, harden, layout, accessibility, responsive behavior, empty states, onboarding, copy, and design-system fit. Skip it for backend-only work or obvious low-risk changes.
-
-## Layers
-
-Vorth treats [Layers Skills](https://github.com/jamiemill/layers-skills) as a product/UX decision-discovery gate. It is advisory by default because most software engineering work should not pay a product-framing tax.
-
-Default mode is:
-
-```yaml
-layers: advisory
-```
-
-In `advisory`, Vorth writes product/UX routing rules but does not vendor the Layers skill repository.
-
-When the user explicitly selects `--layers enabled`, Vorth vendors the official skills project-local:
-
-```powershell
-git clone https://github.com/jamiemill/layers-skills.git .vorth/vendor/layers-skills
-```
-
-Use Layers when audience, user need, domain model, product strategy, conceptual model, interaction flow, or surface direction is unclear. Skip it when the engineering behavior and files are already clear.
-
-## Native vs Project-Local
-
-There is an important tradeoff.
-
-Superpowers' native Antigravity install is:
-
-```powershell
-agy plugin install https://github.com/obra/superpowers
-```
-
-That route uses the creator's plugin/session-start behavior and gives the strongest Superpowers activation, but it can be harness-level rather than strictly project-local.
-
-ECC's Antigravity install is project-local:
-
-```powershell
-.\.vorth\vendor\ECC\install.ps1 --target antigravity --profile minimal --dry-run
-.\.vorth\vendor\ECC\install.ps1 --target antigravity --profile minimal
-```
-
-That writes ECC-managed files under `.agent/` in the current project.
-
-ECC's Codex target writes to Codex home and is therefore treated as native/global:
-
-```powershell
-.\.vorth\vendor\ECC\install.ps1 --target codex --profile minimal --dry-run
-.\.vorth\vendor\ECC\install.ps1 --target codex --profile minimal
-```
-
-Vorth must not silently run native/global installers. It should ask first and record the selected scope in `.vorth/vorth.config.md`.
-
-## Agy Native Bridge
-
-Vorth can optionally configure an Antigravity-only MCP bridge named `vorth-agy-native-bridge`. It gives the main Agy agent same-turn tools for bounded execution through the active Antigravity language server and the user's Antigravity OAuth session.
-
-The bridge exposes:
-
-| Tool | Purpose |
-| --- | --- |
-| `vorth_agy_status` | Check whether a usable Antigravity workspace language server is available. |
-| `vorth_agy_models` | Read available Antigravity models and resolve the Flash High model dynamically. |
-| `vorth_agy_delegate` | Start a bounded cascade task and return the planner response/result. |
-| `vorth_agy_read_result` | Read a previous cascade result by `cascadeId`. |
-| `vorth_flash_high_execute` | Compatibility alias for bounded Flash High execution. |
-
-The target model is resolved at runtime. On the tested Antigravity runtime, Gemini 3.5 Flash High maps to:
-
-```yaml
-id: gemini-3-flash-agent
-displayName: Gemini 3.5 Flash (High)
-model: MODEL_PLACEHOLDER_M132
-```
-
-Do not hardcode the enum as the only path. Use the resolver first and treat `MODEL_PLACEHOLDER_M132` as a known fallback.
-
-The bridge is intentionally narrow:
-
-- It is enabled only per project after user approval.
-- It is never configured for Codex.
-- It is called only after Superpowers/ECC reduce work to a specific execution task.
-- It defaults to patch-only output; the main Agy agent applies, verifies, and reviews.
-- It must not handle architecture, security review, broad debugging, or final review.
-
-If Agy requires user-level MCP registration, Vorth should ask first, point the registration at the project-local server under `.vorth/mcp/`, and make the server reject delegation calls outside a Vorth-enabled repo.
-
-## Worker Profile
-
-For a second Google/Antigravity account, use the same Antigravity binary with an isolated profile:
-
-```powershell
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --user-data-dir C:\tmp\vorth-agy-worker --extensions-dir C:\tmp\vorth-agy-worker-ext --workspace .
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status --user-data-dir C:\tmp\vorth-agy-worker
-```
-
-The worker profile must be logged in once interactively before it can serve native OAuth requests. The bridge should prefer the active profile until the worker profile reports a usable workspace language server.
-
-## Modes
-
-| Mode | Meaning |
-| --- | --- |
-| `project-local` | Default. Vorth activation is scoped to this repo through `.vorth/`, `GEMINI.md`, `AGENTS.md`, and project-local assets. |
-| `native` | User approved official plugin/global install for maximum native behavior. |
-| `mixed` | Some pieces are project-local, others are native/global. |
-| `degraded` | One or both stacks are missing; Vorth uses its minimal internal workflow and reports what is missing. |
-
-## Turn Process Summary
-
-### Antigravity
-
-- Vorth uses `GEMINI.md` as the project instruction adapter.
-- ECC's official Antigravity target writes `.agent/rules`, `.agent/workflows`, `.agent/skills`, and `.agent/ecc-install-state.json`.
-- Superpowers' official Antigravity plugin uses session-start activation, so it is the best fidelity path when the user accepts harness-level install.
-- The optional native bridge is Agy-only and exposed through MCP, not through Codex instructions.
-
-### Codex
-
-- Codex reads `AGENTS.md` before work at session/run start.
-- Codex discovers project skills from `.agents/skills` from the current directory up to the repo root.
-- Codex plugins can bundle skills and hooks.
-- Codex subagents are explicit; Vorth should request them only during Superpowers plan execution or deliberate parallel review.
-
-## Stack Roles
-
-| Stack | Role in Vorth | When Used |
+| Stack | Role | Use it when |
 | --- | --- | --- |
-| Superpowers | Baseline workflow | Every non-trivial Vorth task. |
-| CodeGraph | Codebase intelligence layer | Before broad codebase exploration, file discovery, relationship tracing, and many-file reads. |
-| ECC | Specialist layer | Planning complexity, TDD support, code review, security, build failures, language-specific risks. |
-| Impeccable | Frontend/UI quality gate | UI creation, critique, audit, polish, harden, layout, accessibility, and responsive behavior. |
-| Layers | Product/UX decision gate | Ambiguous product intent, domain, user needs, conceptual model, interaction flow, or surface direction. |
-| Ponytail | Complexity guard | After context and before edit; dependency, abstraction, and scope decisions. |
-| RTK | Command-output optimizer | Noisy diffs, searches, test output, build logs, and shell output where summaries are enough. |
-| Caveman | Compact-report mode | Subagent summaries, handoffs, and short low-risk status reports. |
-| Agy Native Bridge | Execution adapter | Bounded implementation, build fixes, TDD GREEN phase, mechanical refactors, docs, and test execution in Antigravity only. |
+| Superpowers | Baseline process | Clarification, planning, TDD, execution, review, verification |
+| CodeGraph | Code intelligence | Before broad exploration or many-file reads |
+| ECC | Engineering specialists | Architecture, tests, security, build failures, code/language review |
+| Impeccable | Frontend quality gate | Visible UI design, critique, accessibility, responsive behavior |
+| Layers | Product/UX decision gate | Intent, conceptual model, or interaction flow is unclear |
+| Ponytail | Complexity guard | After context is sufficient and before editing |
+| RTK | Shell-output optimizer | Noisy search, diff, test, build, lint, and log output |
+| Caveman | Compact report mode | Low-risk subagent summaries and handoffs only |
+| Agy Native Bridge | Bounded executor | Antigravity-only implementation after scope is explicit |
 
-## Specialist Routing
+The user instruction always wins. Superpowers owns process; the other stacks are
+routed gates, guards, or executors. Vorth never invokes every stack as a ritual.
 
-| Signal | ECC Specialist |
-| --- | --- |
-| Complex plan or architecture | `planner` / `architect` |
-| Behavior change | `tdd-guide` / `tdd-workflow` |
-| Finished code | `code-reviewer` |
-| Auth, secrets, payments, permissions, user data | `security-reviewer` |
-| Build/type/test failure | `build-error-resolver` |
-| Language-specific risk | `typescript-reviewer`, `python-reviewer`, `go-reviewer`, etc. |
+## Low-Token Activation
+
+Initialize from the target repository:
+
+```powershell
+node <vorth-root>\bin\vorth.mjs init --repo . --json
+```
+
+`init` does all project-local activation in one process:
+
+- creates or upgrades `.vorth/`;
+- writes authoritative `.vorth/vorth.config.json` and a generated Markdown summary;
+- compiles a compact, config-aware `.vorth/runtime.md`;
+- adds small managed blocks to `AGENTS.md` and `GEMINI.md`;
+- writes the local Git exclude block;
+- runs `codegraph init` once when CodeGraph is enabled, its CLI is available,
+  and `.codegraph/` is not already present;
+- reports separate setup actions for missing official runtimes.
+
+It does not download packages, clone repositories, or change harness-global
+configuration. Re-running init preserves every option not explicitly passed.
+Legacy Markdown-only Vorth configuration is migrated to JSON automatically.
+
+The provider bootstrap reads only `.vorth/runtime.md`. Detailed instruction files
+under `.vorth/instructions/` are loaded lazily when routing makes them relevant.
+Open a new Antigravity/Codex session after `init` or `sync` so its project
+instructions are loaded from session start.
+
+## Configuration
+
+Defaults:
+
+```json
+{
+  "superpowers": "auto",
+  "eccAntigravity": "minimal",
+  "eccCodex": "auto",
+  "bridge": "disabled",
+  "codegraph": "enabled",
+  "impeccable": "auto",
+  "layers": "advisory",
+  "ponytail": "full",
+  "rtk": "auto",
+  "caveman": "subagent-only"
+}
+```
+
+Use explicit init flags to change a value. For example:
+
+```powershell
+node <vorth-root>\bin\vorth.mjs init --repo . --bridge enabled --layers enabled --rtk disabled --json
+```
+
+The JSON file is authoritative. Do not hand-edit generated `runtime.md`, managed
+blocks, or the Markdown config summary; run `sync` to repair them from JSON.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
-| `/vorth init` | Initialize Vorth in the current repository. |
-| `/vorth status` | Show activation files, stack availability, install scope, and context summary. |
-| `/vorth reset` | Remove only Vorth-managed files/blocks after confirmation. |
+| `vorth init` | Create/upgrade activation without network or global installs |
+| `vorth sync` | Regenerate managed files from JSON configuration |
+| `vorth setup` | Run one explicit official stack adapter with approvals |
+| `vorth status` | Read-only activation and stack detection |
+| `vorth doctor` | Turn health state into actionable issues |
+| `vorth reset --confirm` | Remove only Vorth-managed activation |
 
-The project-local CLI implements the same flows:
+Useful forms:
 
 ```powershell
-node bin\vorth.mjs init --repo <repo> --bridge enabled --codegraph enabled --impeccable auto --layers advisory --ponytail full --rtk auto --caveman subagent-only
-node bin\vorth.mjs status --repo <repo>
-node bin\vorth.mjs reset --repo <repo> --confirm
+node bin\vorth.mjs init --repo <repo> --dry-run --json
+node bin\vorth.mjs sync --repo <repo> --json
+node bin\vorth.mjs setup --repo <repo> --stack <name> --dry-run --json
+node bin\vorth.mjs status --repo <repo> --json
+node bin\vorth.mjs doctor --repo <repo> --json
+node bin\vorth.mjs doctor --repo <repo> --probe --json
+node bin\vorth.mjs reset --repo <repo> --confirm --json
 ```
 
-`status` detects project bridge files, CodeGraph CLI/index state, Impeccable assets, Layers vendor state, Ponytail/Caveman policy assets, RTK CLI state, checks user-level MCP registration read-only where possible, and prints suggested next steps when missing. It does not edit global MCP config automatically.
-It also reports whether Vorth's local Git exclude block is configured.
+`status` never probes the Antigravity language server by default. `--probe` is an
+explicit live check. All JSON modes are compact enough for agent orchestration.
 
-## Operating Rule
+## Official Setup Adapters
 
-Superpowers decides **when** work happens.
+Run setup first without approval flags to see its required scope. Network changes
+need `--allow-network --confirm`; harness/global changes need
+`--allow-native --confirm`. `--dry-run` never invokes an adapter.
 
-CodeGraph decides **where to look first** when the codebase area is not already clear.
+| Stack | Vorth adapter |
+| --- | --- |
+| CodeGraph | `codegraph init`; optional local agent wiring via `codegraph install --target=auto --location=local --yes` |
+| Superpowers | Antigravity CLI plugin when available; Codex installation remains its official `/plugins` flow |
+| ECC | Clones `affaan-m/everything-claude-code`, previews, then runs minimal `--target antigravity` install |
+| Impeccable | `npx --yes impeccable install --providers=gemini,codex --scope=project` |
+| Layers | Depth-1 project-local checkout of `jamiemill/layers-skills` with revision detection |
+| Ponytail | Official `agy plugin install` or Codex plugin commands; both are harness-level |
+| RTK | Official project Antigravity rules or approved global Codex wiring |
+| Caveman | Policy-only by design, preserving `subagent-only` scope |
 
-ECC decides **who** should review or assist specialist work.
+Vorth does not invent a native installer where the creator does not provide one.
+It returns `manual_action`, `approval_required`, or `missing_cli` instead.
 
-Impeccable decides **how to improve visible UI quality** once product direction is clear.
+Official sources:
 
-Layers decides **what product/UX questions must be answered** before UI/code when intent is unclear.
+- [Superpowers](https://github.com/obra/superpowers)
+- [Everything Claude Code](https://github.com/affaan-m/everything-claude-code)
+- [CodeGraph](https://github.com/colbymchenry/codegraph)
+- [Impeccable](https://github.com/pbakaus/impeccable)
+- [Layers](https://github.com/jamiemill/layers-skills)
+- [Ponytail](https://github.com/DietrichGebert/ponytail)
+- [RTK](https://github.com/rtk-ai/rtk)
+- [Caveman](https://github.com/JuliusBrussee/caveman)
 
-Ponytail decides **how little new code is enough** after context is clear.
+CodeGraph telemetry follows its official policy; see
+[TELEMETRY.md](https://github.com/colbymchenry/codegraph/blob/main/TELEMETRY.md).
 
-RTK decides **which noisy shell output can be summarized** before it consumes context.
+## Development Flow
 
-Caveman decides **when low-risk reports can be compact**, while clarity remains higher priority.
+An ideal non-trivial Vorth turn is:
 
-The Agy Native Bridge decides nothing. It only executes bounded tasks that the main Agy agent delegates.
+```text
+user intent
+  -> load compact runtime/context
+  -> Layers only if product intent is unclear
+  -> CodeGraph only if code scope is broad
+  -> Superpowers clarification/design/plan
+  -> ECC specialist only at a matching risk gate
+  -> Ponytail complexity check
+  -> implementation/TDD
+  -> RTK for noisy commands when raw detail is not required
+  -> optional bounded Antigravity delegation
+  -> main-agent verification and review
+  -> concise result; Caveman only for internal handoff/report
+```
 
-Vorth decides **whether this repository opted in** and keeps the project context current.
+For a clear one-file change, this collapses to: understand, inspect the known file,
+apply Ponytail lightly, edit, run a narrow check, and report. CodeGraph, Layers,
+Impeccable, broad planning, and delegation are skipped unless risk appears.
+
+## CodeGraph Rule
+
+- Before broad codebase exploration, use `codegraph_explore` first.
+- Before reading many files, query CodeGraph to narrow files, symbols, and flows.
+- Skip CodeGraph when the exact file/symbol is already known.
+- If unavailable or stale, say graph mode is degraded and use narrow search/reads.
+
+Vorth init owns per-repo `codegraph init`. Agent MCP wiring remains CodeGraph's
+official installer responsibility and is never changed silently.
+
+## Agy Native Bridge
+
+When `bridge` is enabled, Vorth copies a project-local MCP server to:
+
+```text
+.vorth/mcp/vorth-agy-native-bridge/server.mjs
+```
+
+It uses the selected Antigravity OAuth session, not a Gemini API key. The bridge:
+
+- resolves Gemini 3.5 Flash High from the selected session's live model list;
+- refuses to guess when multiple usable workspace sessions exist;
+- derives workspace URI from validated `repoRoot`;
+- requires repository-relative `filesAllowed` and explicit acceptance criteria;
+- binds cascade reads to the issuing repo, bridge process, and language server;
+- rejects returned diffs outside allowed files or inside `.git/`, `.vorth/`, or
+  `.codegraph/`;
+- caps MCP frames, RPC responses, patch size, and fallback raw responses;
+- exposes safe heartbeat/model metadata without calling user-status RPCs.
+
+The main agent still owns patch application, tests, review, and final reporting.
+Codex ignores this bridge.
+
+For a separately authenticated worker profile, use the bundled profile manager.
+It defaults to OS temporary directories, discovers the Antigravity CLI without a
+machine-specific path, and reports ready only when both HTTPS and CSRF runtime
+arguments are present.
+
+## Git Hygiene And Reset
+
+Vorth writes only `.vorth/` and `.codegraph/` to `.git/info/exclude`. It does not
+hide `.agent/`, `.agents/`, `.codex/`, or `.gemini/`; official project-scoped stack
+assets there may be intentional project source and should be reviewed normally.
+
+`reset --confirm` removes `.vorth/`, the Vorth blocks in `AGENTS.md`/`GEMINI.md`,
+and Vorth's local exclude block. It preserves `.codegraph/`, official stack assets,
+and all external or harness-level installs.
+
+## Verification
+
+```powershell
+npm.cmd run check
+```
+
+The test suite covers low-token budgets, JSON output, idempotency, legacy migration,
+partial re-init, disabled routing, dry-run/approval behavior, status/doctor/reset,
+Git hygiene, model resolution, session ambiguity, delegation scope, and patch
+containment.

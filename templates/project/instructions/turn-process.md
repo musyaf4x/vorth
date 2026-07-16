@@ -22,4 +22,4 @@ User prompt -> activation check -> context load -> stack routing -> CodeGraph if
 - Use Caveman only for compact subagent, status, or handoff reports.
 - Agy Native Bridge is Antigravity-only.
 - Codex ignores Agy bridge tools.
-- CodeGraph, Impeccable, Layers, Ponytail, RTK, and Caveman are selected by `.vorth/vorth.config.md` and stack routing.
+- CodeGraph, Impeccable, Layers, Ponytail, RTK, and Caveman are selected by `.vorth/vorth.config.json` and stack routing.

@@ -1,6 +1,6 @@
 {
   "name": "vorth",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Project-local Vorth engineering harness for Antigravity and Codex.",
@@ -8,7 +8,8 @@
     "vorth": "./bin/vorth.mjs"
   },
   "scripts": {
-    "check": "node --check bin/vorth.mjs && node --check templates/mcp/vorth-agy-native-bridge/server.mjs && node --check templates/mcp/vorth-agy-native-bridge/profile-manager.mjs"
+    "test": "node --test",
+    "check": "node --check bin/vorth.mjs && node --check lib/vorth.mjs && node --check templates/mcp/vorth-agy-native-bridge/server.mjs && node --check templates/mcp/vorth-agy-native-bridge/profile-manager.mjs && node --test"
   },
   "engines": {
     "node": ">=20"
