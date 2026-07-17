@@ -9,13 +9,14 @@ export const projectRoot = path.resolve(testDir, "..");
 export const cliPath = path.join(projectRoot, "bin", "vorth.mjs");
 
 export function createTempRepo(t, name = "repo") {
-  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-test-"));
-  const repo = path.join(parent, name);
-  fs.mkdirSync(repo, { recursive: true });
+  const { parent, target: repo } = createTempTarget(t, name);
   const git = spawnSync("git", ["init", "--quiet", repo], { encoding: "utf8" });
   if (git.status !== 0) throw new Error(git.stderr || "git init failed");
-  t.after(() => safeRemoveTemp(parent));
   return repo;
+}
+
+export function createTempDirectory(t, name = "directory") {
+  return createTempTarget(t, name).target;
 }
 
 export function runCli(args, options = {}) {
@@ -59,6 +60,19 @@ export function installFakeCodeGraph(t) {
   };
 }
 
+export function installFakeAntigravityCli(t) {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-agy-bin-"));
+  const logPath = path.join(binDir, "antigravity.log");
+  const shimPath = path.join(binDir, process.platform === "win32" ? "antigravity-ide.cmd" : "antigravity-ide");
+  const shim = process.platform === "win32"
+    ? ["@echo off", `echo %*>>\"${logPath}\"`, "exit /b 0"].join("\r\n")
+    : ["#!/bin/sh", `printf '%s\\n' \"$*\" >> '${logPath.replaceAll("'", "'\\''")}'`, "exit 0"].join("\n");
+  fs.writeFileSync(shimPath, shim, "utf8");
+  if (process.platform !== "win32") fs.chmodSync(shimPath, 0o755);
+  t.after(() => safeRemoveTemp(binDir));
+  return { cliPath: shimPath, logPath };
+}
+
 export function countMarker(text, marker) {
   return text.split(marker).length - 1;
 }
@@ -71,4 +85,12 @@ function safeRemoveTemp(target) {
     throw new Error(`Refusing to remove non-temp test path: ${resolved}`);
   }
   fs.rmSync(resolved, { recursive: true, force: true });
+}
+
+function createTempTarget(t, name) {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-test-"));
+  const target = path.join(parent, name);
+  fs.mkdirSync(target, { recursive: true });
+  t.after(() => safeRemoveTemp(parent));
+  return { parent, target };
 }

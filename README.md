@@ -4,9 +4,10 @@ Vorth is a project-local engineering harness for Antigravity and Codex. It does
 not replace the underlying stacks; it activates them per repository, routes each
 one to a narrow role, and reports when an official runtime is missing.
 
-Version 0.3 separates cheap project activation from external installation. A
-normal init is one deterministic CLI call, not an agent-led sequence of template
-reads and installer decisions.
+Version 0.4 adds a real local CLI, presets, a declarative health reconciler, and a
+stable Antigravity worker bridge. Project activation remains cheap; missing
+required runtimes are repaired through one guided command instead of memorized
+per-stack commands.
 
 ## Stack Map
 
@@ -27,10 +28,16 @@ routed gates, guards, or executors. Vorth never invokes every stack as a ritual.
 
 ## Low-Token Activation
 
-Initialize from the target repository:
+Install the short command once from the Vorth checkout:
 
 ```powershell
-node <vorth-root>\bin\vorth.mjs init --repo . --json
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+```
+
+Open a new terminal. In any target repository, run:
+
+```powershell
+vorth init
 ```
 
 `init` does all project-local activation in one process:
@@ -42,11 +49,13 @@ node <vorth-root>\bin\vorth.mjs init --repo . --json
 - writes the local Git exclude block;
 - runs `codegraph init` once when CodeGraph is enabled, its CLI is available,
   and `.codegraph/` is not already present;
-- reports separate setup actions for missing official runtimes.
+- builds a repair plan for missing required runtimes.
 
-It does not download packages, clone repositories, or change harness-global
-configuration. Re-running init preserves every option not explicitly passed.
-Legacy Markdown-only Vorth configuration is migrated to JSON automatically.
+Interactive `init` offers to apply the safe parts of that plan and asks separately
+before network or harness-level changes. `vorth init --json` and
+`vorth init --no-setup` perform deterministic project activation only. Re-running
+init preserves every option not explicitly passed. Legacy Markdown-only Vorth
+configuration is migrated to JSON automatically.
 
 The provider bootstrap reads only `.vorth/runtime.md`. Detailed instruction files
 under `.vorth/instructions/` are loaded lazily when routing makes them relevant.
@@ -55,7 +64,11 @@ instructions are loaded from session start.
 
 ## Configuration
 
-Defaults:
+The installer stores the recommended `agy-codex` preset as the user-level CLI
+default. It enables the dedicated bridge worker and requires ECC minimal for both
+harnesses. Project instructions remain project-local.
+
+Built-in `balanced` defaults:
 
 ```json
 {
@@ -75,8 +88,11 @@ Defaults:
 Use explicit init flags to change a value. For example:
 
 ```powershell
-node <vorth-root>\bin\vorth.mjs init --repo . --bridge enabled --layers enabled --rtk disabled --json
+vorth init --bridge enabled --layers enabled --rtk disabled --no-setup
 ```
+
+Change the default preset with `vorth configure --preset balanced` or select one
+project with `vorth init --preset minimal`.
 
 The JSON file is authoritative. Do not hand-edit generated `runtime.md`, managed
 blocks, or the Markdown config summary; run `sync` to repair them from JSON.
@@ -85,9 +101,12 @@ blocks, or the Markdown config summary; run `sync` to repair them from JSON.
 
 | Command | Purpose |
 | --- | --- |
-| `vorth init` | Create/upgrade activation without network or global installs |
+| `vorth configure` | Store the default CLI preset without changing agent-global behavior |
+| `vorth init` | Create/upgrade activation and offer guided repair in an interactive terminal |
 | `vorth sync` | Regenerate managed files from JSON configuration |
-| `vorth setup` | Run one explicit official stack adapter with approvals |
+| `vorth setup` | Run the guided reconciler, or one explicit stack adapter |
+| `vorth repair` | Detect and reconcile missing required stack health |
+| `vorth bridge` | Initialize, authenticate, launch, or inspect the dedicated Agy worker |
 | `vorth status` | Read-only activation and stack detection |
 | `vorth doctor` | Turn health state into actionable issues |
 | `vorth reset --confirm` | Remove only Vorth-managed activation |
@@ -95,16 +114,20 @@ blocks, or the Markdown config summary; run `sync` to repair them from JSON.
 Useful forms:
 
 ```powershell
-node bin\vorth.mjs init --repo <repo> --dry-run --json
-node bin\vorth.mjs sync --repo <repo> --json
-node bin\vorth.mjs setup --repo <repo> --stack <name> --dry-run --json
-node bin\vorth.mjs status --repo <repo> --json
-node bin\vorth.mjs doctor --repo <repo> --json
-node bin\vorth.mjs doctor --repo <repo> --probe --json
-node bin\vorth.mjs reset --repo <repo> --confirm --json
+vorth init --dry-run --json
+vorth init --yes --allow-network --allow-native
+vorth repair
+vorth repair --json
+vorth setup --stack codegraph --dry-run --json
+vorth bridge login --repo .
+vorth status --json
+vorth doctor --probe --json
+vorth reset --confirm --json
 ```
 
-`status` never probes the Antigravity language server by default. `--probe` is an
+The `--yes` form is intended for an already-approved agent/automation run; network
+and harness permission remain separate flags. Normal human use is just
+`vorth init` and its prompts. `status` never probes the Antigravity language server by default. `--probe` is an
 explicit live check. All JSON modes are compact enough for agent orchestration.
 
 ## Official Setup Adapters
@@ -115,7 +138,7 @@ need `--allow-network --confirm`; harness/global changes need
 
 | Stack | Vorth adapter |
 | --- | --- |
-| CodeGraph | `codegraph init`; optional local agent wiring via `codegraph install --target=auto --location=local --yes` |
+| CodeGraph | Installs `@colbymchenry/codegraph` globally only after approval, runs `codegraph init`, then optional local agent wiring |
 | Superpowers | Antigravity CLI plugin when available; Codex installation remains its official `/plugins` flow |
 | ECC | Clones `affaan-m/everything-claude-code`, previews, then runs minimal `--target antigravity` install |
 | Impeccable | `npx --yes impeccable install --providers=gemini,codex --scope=project` |
@@ -123,6 +146,7 @@ need `--allow-network --confirm`; harness/global changes need
 | Ponytail | Official `agy plugin install` or Codex plugin commands; both are harness-level |
 | RTK | Official project Antigravity rules or approved global Codex wiring |
 | Caveman | Policy-only by design, preserving `subagent-only` scope |
+| Agy Native Bridge | Stable router under `~/.vorth/bridge`, fixed-port worker profile, and Antigravity MCP registration |
 
 Vorth does not invent a native installer where the creator does not provide one.
 It returns `manual_action`, `approval_required`, or `missing_cli` instead.
@@ -176,10 +200,10 @@ official installer responsibility and is never changed silently.
 
 ## Agy Native Bridge
 
-When `bridge` is enabled, Vorth copies a project-local MCP server to:
+When `bridge` is enabled, `vorth repair` installs one stable MCP router at:
 
 ```text
-.vorth/mcp/vorth-agy-native-bridge/server.mjs
+~/.vorth/bridge/server.mjs
 ```
 
 It uses the selected Antigravity OAuth session, not a Gemini API key. The bridge:
@@ -197,10 +221,15 @@ It uses the selected Antigravity OAuth session, not a Gemini API key. The bridge
 The main agent still owns patch application, tests, review, and final reporting.
 Codex ignores this bridge.
 
-For a separately authenticated worker profile, use the bundled profile manager.
-It defaults to OS temporary directories, discovers the Antigravity CLI without a
-machine-specific path, and reports ready only when both HTTPS and CSRF runtime
-arguments are present.
+The bridge uses a dedicated persistent profile under `~/.vorth/agy-worker` and a
+small non-secret state file containing its fixed port allocation. Authenticate it
+once with `vorth bridge login --repo .`; later sessions can use
+`vorth bridge launch --repo .`. The router defaults to this worker profile and
+reports ready only when both HTTPS and CSRF runtime arguments are present.
+
+`vorth doctor` reports only missing required stacks as blockers. Optional missing
+tools are informational. A configured bridge that still needs interactive OAuth
+login is a checkpoint (`needs_attention`), not a broken installation.
 
 ## Git Hygiene And Reset
 
@@ -218,7 +247,7 @@ and all external or harness-level installs.
 npm.cmd run check
 ```
 
-The test suite covers low-token budgets, JSON output, idempotency, legacy migration,
-partial re-init, disabled routing, dry-run/approval behavior, status/doctor/reset,
-Git hygiene, model resolution, session ambiguity, delegation scope, and patch
-containment.
+The test suite covers presets, reconciliation plans, stable bridge setup, fixed-port
+worker state, low-token budgets, JSON output, idempotency, legacy migration,
+dry-run/approval behavior, status/doctor/reset, Git hygiene, model resolution,
+session ambiguity, delegation scope, and patch containment.

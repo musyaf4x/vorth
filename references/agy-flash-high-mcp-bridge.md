@@ -52,16 +52,16 @@ invent a separate model id such as `gemini-3.5-flash-high`.
 
 ## MCP Server Shape
 
-Prefer a project-local server copied from:
+Vorth ships the router template at:
 
 ```text
 templates/mcp/vorth-agy-native-bridge/
 ```
 
-into the target project:
+`vorth repair` copies it once into the stable Vorth home:
 
 ```text
-.vorth/mcp/vorth-agy-native-bridge/
+~/.vorth/bridge/
   package.json
   server.mjs
   profile-manager.mjs
@@ -155,9 +155,9 @@ Do not call the bridge for:
 
 ## Registration Rules
 
-If Antigravity supports a project-local MCP config, prefer it.
-
-If only user-level MCP registration is available, ask before editing `~/.gemini/config/mcp_config.json`. The entry should point to the project-local server, and the server must reject calls unless `repoRoot` is Vorth-enabled.
+After explicit harness approval, use Antigravity IDE's `--add-mcp` command to
+register the stable router. Do not write MCP config silently. The server still
+rejects calls unless `repoRoot` is Vorth-enabled.
 
 Suggested MCP registration shape:
 
@@ -166,7 +166,7 @@ Suggested MCP registration shape:
   "mcpServers": {
     "vorth-agy-native-bridge": {
       "command": "node",
-      "args": ["<repo>/.vorth/mcp/vorth-agy-native-bridge/server.mjs"],
+      "args": ["<home>/.vorth/bridge/server.mjs"],
       "tools": {
         "vorth_agy_delegate": {
           "background": "off",
@@ -187,15 +187,16 @@ Suggested MCP registration shape:
 For a second Antigravity account, use a separate user-data-dir instead of logging the active IDE out:
 
 ```powershell
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --workspace .
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status
+vorth bridge init --repo .
+vorth bridge login --repo .
+vorth bridge status
 ```
 
-The helper defaults to OS temporary directories and discovers the Antigravity
-CLI through environment, standard LocalAppData, or PATH. The worker profile must
-be logged in once interactively. Readiness requires a workspace language server
-with both HTTPS and CSRF arguments.
+The helper persists its profile under `~/.vorth/agy-worker`, allocates fixed
+runtime ports in a non-secret state file, and discovers the Antigravity CLI
+through environment, standard LocalAppData, or PATH. The worker profile must be
+logged in once interactively. Readiness requires a workspace language server with
+both HTTPS and CSRF arguments.
 
 ## Prompt Contract
 

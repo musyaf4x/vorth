@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import https from "node:https";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const SERVER_INFO = { name: "vorth-agy-native-bridge", version: "0.2.0" };
+const SERVER_INFO = { name: "vorth-agy-native-bridge", version: "0.3.0" };
 const META = { ideName: "antigravity", extensionName: "antigravity", locale: "en" };
 const FLASH_HIGH_ID = "gemini-3-flash-agent";
 const FLASH_HIGH_DISPLAY = "Gemini 3.5 Flash (High)";
@@ -127,8 +128,9 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 
 if (isMain) {
   if (process.argv.includes("--self-test")) {
-    const status = await toolStatus({});
-    const models = status.ready ? await toolModels({}) : null;
+    const workerArgs = withWorkerProfile({});
+    const status = await toolStatus(workerArgs);
+    const models = status.ready ? await toolModels(workerArgs) : null;
     process.stdout.write(JSON.stringify({ status, flashHigh: models?.flashHigh ?? null }, null, 2));
     process.stdout.write("\n");
   } else {
@@ -255,22 +257,29 @@ async function routeMessage(message) {
 }
 
 async function callTool(name, args) {
+  const routedArgs = withWorkerProfile(args);
   switch (name) {
     case "vorth_agy_status":
-      return toolStatus(args);
+      return toolStatus(routedArgs);
     case "vorth_agy_models":
-      return toolModels(args);
+      return toolModels(routedArgs);
     case "vorth_agy_delegate":
     case "vorth_flash_high_execute":
-      return toolDelegate({ ...args, modelPreference: args.modelPreference || "flash-high" });
+      return toolDelegate({ ...routedArgs, modelPreference: routedArgs.modelPreference || "flash-high" });
     case "vorth_agy_read_result":
-      return toolReadResult(args);
+      return toolReadResult(routedArgs);
     default: {
       const error = new Error(`Unknown tool: ${name}`);
       error.code = -32602;
       throw error;
     }
   }
+}
+
+function withWorkerProfile(args = {}) {
+  if (args.userDataDir) return args;
+  const vorthHome = path.resolve(process.env.VORTH_HOME || path.join(os.homedir(), ".vorth"));
+  return { ...args, userDataDir: process.env.VORTH_AGY_USER_DATA_DIR || path.join(vorthHome, "agy-worker") };
 }
 
 async function toolStatus(args) {

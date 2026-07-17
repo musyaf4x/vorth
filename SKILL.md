@@ -31,18 +31,19 @@ when a missing tool materially changes the work.
 Run the executable instead of simulating these operations:
 
 ```powershell
-node <vorth-root>\bin\vorth.mjs init --repo <repo> --json
-node <vorth-root>\bin\vorth.mjs sync --repo <repo> --json
-node <vorth-root>\bin\vorth.mjs status --repo <repo> --json
-node <vorth-root>\bin\vorth.mjs doctor --repo <repo> --json
-node <vorth-root>\bin\vorth.mjs reset --repo <repo> --confirm --json
+vorth init --repo <repo>
+vorth repair --repo <repo>
+vorth sync --repo <repo> --json
+vorth status --repo <repo> --json
+vorth doctor --repo <repo> --json
+vorth reset --repo <repo> --confirm --json
 ```
 
-`init` is deterministic and non-interactive. It creates or upgrades Vorth files,
-preserves options not explicitly passed, initializes CodeGraph when enabled and
-available, and never performs network or harness-global installs. It may report
-separate setup actions. Open a new Antigravity/Codex session after init or sync so
-provider bootstrap files are reloaded.
+Interactive `init` creates or upgrades Vorth files, preserves options not explicitly
+passed, initializes CodeGraph when enabled and available, then offers a guided
+repair plan. It asks separately before network or harness-level changes. Use
+`--json` or `--no-setup` for deterministic project activation only. Open a new
+Antigravity/Codex session after init or sync so provider bootstrap files reload.
 
 Use explicit init overrides only when the user requests them:
 
@@ -61,7 +62,8 @@ Use explicit init overrides only when the user requests them:
 
 `status` is read-only and does not contact Antigravity by default. Add `--probe`
 only when an explicit live bridge check is needed. `doctor` converts health into
-actionable issues. `sync` regenerates managed files from JSON configuration.
+actionable issues and distinguishes blockers, manual checkpoints, and optional
+degradation. `sync` regenerates managed files from JSON configuration.
 `reset` removes only `.vorth/`, Vorth blocks, and its local Git exclude block; it
 preserves CodeGraph indexes and external/native stack installs.
 
@@ -70,7 +72,8 @@ preserves CodeGraph indexes and external/native stack installs.
 External installation is a separate, approval-bearing operation:
 
 ```powershell
-node <vorth-root>\bin\vorth.mjs setup --repo <repo> --stack <name> --json
+vorth setup --repo <repo>
+vorth setup --repo <repo> --stack <name> --json
 ```
 
 First run setup without approvals to receive its scope and required flags. Network
@@ -78,7 +81,10 @@ operations require `--allow-network --confirm`; harness/global changes require
 `--allow-native --confirm`. Never add these flags without user approval.
 
 Supported adapters: `codegraph`, `superpowers`, `ecc`, `impeccable`, `layers`,
-`ponytail`, `rtk`, and `caveman`. Caveman intentionally remains policy-only.
+`ponytail`, `rtk`, `caveman`, and `bridge`. Caveman intentionally remains
+policy-only. Bridge runtime files live under `~/.vorth/bridge`; project config only
+enables their use. Authenticate the dedicated worker once with
+`vorth bridge login --repo <repo>`.
 
 ## Runtime Model
 

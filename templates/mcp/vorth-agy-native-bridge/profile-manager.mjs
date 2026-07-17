@@ -1,25 +1,35 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 
-const DEFAULT_USER_DATA_DIR = path.join(os.tmpdir(), "vorth-agy-worker");
-const DEFAULT_EXTENSIONS_DIR = path.join(os.tmpdir(), "vorth-agy-worker-ext");
+const VORTH_HOME = path.resolve(process.env.VORTH_HOME || path.join(os.homedir(), ".vorth"));
+const DEFAULT_USER_DATA_DIR = path.join(VORTH_HOME, "agy-worker");
+const DEFAULT_EXTENSIONS_DIR = path.join(VORTH_HOME, "agy-worker-extensions");
+const STATE_PATH = path.join(VORTH_HOME, "bridge-state.json");
 
 const command = process.argv[2] || "help";
 const options = parseOptions(process.argv.slice(3));
 
 try {
+  await main();
+} catch (error) {
+  process.stderr.write(`${safeMessage(error)}\n`);
+  process.exit(1);
+}
+
+async function main() {
   switch (command) {
     case "init":
-      cmdInit(options);
+      await cmdInit(options);
       break;
     case "login":
-      cmdLaunch(options, false);
+      await cmdLaunch(options, false);
       break;
     case "launch":
-      cmdLaunch(options, true);
+      await cmdLaunch(options, true);
       break;
     case "status":
       cmdStatus(options);
@@ -29,54 +39,59 @@ try {
       printHelp();
       break;
   }
-} catch (error) {
-  process.stderr.write(`${safeMessage(error)}\n`);
-  process.exit(1);
 }
 
-function cmdInit(options) {
-  const userDataDir = resolvePath(options.userDataDir || process.env.VORTH_AGY_USER_DATA_DIR || DEFAULT_USER_DATA_DIR);
-  const extensionsDir = resolvePath(options.extensionsDir || process.env.VORTH_AGY_EXTENSIONS_DIR || DEFAULT_EXTENSIONS_DIR);
-  fs.mkdirSync(userDataDir, { recursive: true });
-  fs.mkdirSync(extensionsDir, { recursive: true });
+async function cmdInit(input) {
+  const state = await ensureState(input);
   printJson({
     status: "ok",
-    userDataDir,
-    extensionsDir,
+    userDataDir: state.userDataDir,
+    extensionsDir: state.extensionsDir,
+    fixedPortsConfigured: true,
     next: "Run login once to authenticate this worker profile."
   });
 }
 
-function cmdLaunch(options, hidden) {
-  const antigravityCli = resolveCli(options.antigravityCli || process.env.ANTIGRAVITY_IDE_CLI);
-  const userDataDir = resolvePath(options.userDataDir || process.env.VORTH_AGY_USER_DATA_DIR || DEFAULT_USER_DATA_DIR);
-  const extensionsDir = resolvePath(options.extensionsDir || process.env.VORTH_AGY_EXTENSIONS_DIR || DEFAULT_EXTENSIONS_DIR);
-  const workspace = resolvePath(options.workspace || process.cwd());
+async function cmdLaunch(input, hidden) {
+  const state = await ensureState(input);
+  const antigravityCli = resolveCli(input.antigravityCli || process.env.ANTIGRAVITY_IDE_CLI);
+  const workspace = resolvePath(input.workspace || state.workspace || process.cwd());
 
-  fs.mkdirSync(userDataDir, { recursive: true });
-  fs.mkdirSync(extensionsDir, { recursive: true });
+  fs.mkdirSync(state.userDataDir, { recursive: true });
+  fs.mkdirSync(state.extensionsDir, { recursive: true });
+  writeState({ ...state, workspace });
 
   const windowStyle = hidden ? "-WindowStyle Hidden " : "";
   const script = [
+    "$oldServer = $env:JETSKI_FIXED_SERVER_PORT; $oldLsp = $env:JETSKI_FIXED_LSP_PORT;",
+    `$env:JETSKI_FIXED_SERVER_PORT = ${psQuote(String(state.httpsPort))};`,
+    `$env:JETSKI_FIXED_LSP_PORT = ${psQuote(String(state.lspPort))};`,
+    "try {",
     `$p = Start-Process -FilePath ${psQuote(antigravityCli)}`,
-    `-ArgumentList @('--user-data-dir', ${psQuote(userDataDir)}, '--extensions-dir', ${psQuote(extensionsDir)}, '--new-window', ${psQuote(workspace)})`,
-    `${windowStyle}-PassThru`,
-    "[pscustomobject]@{Id=$p.Id; ProcessName=$p.ProcessName} | ConvertTo-Json -Compress"
+    `-ArgumentList @('--user-data-dir', ${psQuote(state.userDataDir)}, '--extensions-dir', ${psQuote(state.extensionsDir)}, '--new-window', ${psQuote(workspace)})`,
+    `${windowStyle}-PassThru;`,
+    "[pscustomobject]@{Id=$p.Id; ProcessName=$p.ProcessName} | ConvertTo-Json -Compress",
+    "} finally {",
+    "if ($null -eq $oldServer) { Remove-Item Env:JETSKI_FIXED_SERVER_PORT -ErrorAction SilentlyContinue } else { $env:JETSKI_FIXED_SERVER_PORT = $oldServer };",
+    "if ($null -eq $oldLsp) { Remove-Item Env:JETSKI_FIXED_LSP_PORT -ErrorAction SilentlyContinue } else { $env:JETSKI_FIXED_LSP_PORT = $oldLsp }",
+    "}"
   ].join(" ");
 
   const started = runPowerShell(script).trim();
   printJson({
     status: "ok",
     mode: hidden ? "launch" : "login",
-    userDataDir,
-    extensionsDir,
+    userDataDir: state.userDataDir,
+    extensionsDir: state.extensionsDir,
     workspace,
+    fixedPortsConfigured: true,
     process: parseJson(started)
   });
 }
 
-function cmdStatus(options) {
-  const userDataDir = resolvePath(options.userDataDir || process.env.VORTH_AGY_USER_DATA_DIR || DEFAULT_USER_DATA_DIR);
+function cmdStatus(input) {
+  const state = readState();
+  const userDataDir = resolvePath(input.userDataDir || state?.userDataDir || process.env.VORTH_AGY_USER_DATA_DIR || DEFAULT_USER_DATA_DIR);
   const rows = getProcesses();
   const selfRelated = collectSelfRelated(rows);
   const roots = rows
@@ -100,11 +115,65 @@ function cmdStatus(options) {
 
   printJson({
     status: "ok",
+    initialized: Boolean(state),
     userDataDir,
+    fixedPortsConfigured: Boolean(state?.httpsPort && state?.lspPort),
     workerProcessCount: descendants.size,
     languageServers,
     ready: languageServers.some((server) => server.hasHttps && server.hasCsrf)
   });
+}
+
+async function ensureState(input) {
+  const current = readState() || {};
+  const userDataDir = resolvePath(input.userDataDir || current.userDataDir || process.env.VORTH_AGY_USER_DATA_DIR || DEFAULT_USER_DATA_DIR);
+  const extensionsDir = resolvePath(input.extensionsDir || current.extensionsDir || process.env.VORTH_AGY_EXTENSIONS_DIR || DEFAULT_EXTENSIONS_DIR);
+  const workspace = input.workspace ? resolvePath(input.workspace) : current.workspace || null;
+  const httpsPort = validPort(current.httpsPort) ? current.httpsPort : await findFreePort();
+  const lspPort = validPort(current.lspPort) && current.lspPort !== httpsPort ? current.lspPort : await findFreePortExcept(httpsPort);
+  const state = { schemaVersion: 1, userDataDir, extensionsDir, workspace, httpsPort, lspPort };
+  fs.mkdirSync(userDataDir, { recursive: true });
+  fs.mkdirSync(extensionsDir, { recursive: true });
+  writeState(state);
+  return state;
+}
+
+function readState() {
+  if (!fs.existsSync(STATE_PATH)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeState(state) {
+  fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
+  fs.writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+}
+
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      server.close((error) => error ? reject(error) : resolve(port));
+    });
+  });
+}
+
+async function findFreePortExcept(excluded) {
+  let port = await findFreePort();
+  while (port === excluded) port = await findFreePort();
+  return port;
+}
+
+function validPort(value) {
+  return Number.isInteger(value) && value > 1024 && value <= 65535;
 }
 
 function printHelp() {
@@ -113,8 +182,8 @@ function printHelp() {
     "",
     "Commands:",
     "  init    --user-data-dir <dir> --extensions-dir <dir>",
-    "  login   --user-data-dir <dir> --extensions-dir <dir> --workspace <repo>",
-    "  launch  --user-data-dir <dir> --extensions-dir <dir> --workspace <repo>",
+    "  login   --workspace <repo>",
+    "  launch  --workspace <repo>",
     "  status  --user-data-dir <dir>",
     "",
     "login opens a visible Antigravity window so you can authenticate the worker profile.",
@@ -130,9 +199,8 @@ function parseOptions(args) {
     if (!item.startsWith("--")) continue;
     const key = item.slice(2).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
     const next = args[index + 1];
-    if (!next || next.startsWith("--")) {
-      result[key] = true;
-    } else {
+    if (!next || next.startsWith("--")) result[key] = true;
+    else {
       result[key] = next;
       index += 1;
     }

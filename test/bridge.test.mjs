@@ -92,7 +92,17 @@ test("worker profile helper is portable and requires authenticated readiness", (
     testDir,
     "..", "templates", "mcp", "vorth-agy-native-bridge", "profile-manager.mjs"
   ), "utf8");
+  const server = fs.readFileSync(path.join(
+    testDir,
+    "..", "templates", "mcp", "vorth-agy-native-bridge", "server.mjs"
+  ), "utf8");
   assert.doesNotMatch(profileManager, /C:\\\\Users\\\\hafid/i);
-  assert.match(profileManager, /os\.tmpdir\(\)/);
+  assert.doesNotMatch(profileManager, /os\.tmpdir\(\)/);
+  assert.match(profileManager, /VORTH_HOME/);
+  assert.match(profileManager, /JETSKI_FIXED_SERVER_PORT/);
+  assert.match(profileManager, /JETSKI_FIXED_LSP_PORT/);
+  assert.match(profileManager, /bridge-state\.json/);
   assert.match(profileManager, /server\.hasHttps && server\.hasCsrf/);
+  assert.match(server, /withWorkerProfile/);
+  assert.match(server, /agy-worker/);
 });

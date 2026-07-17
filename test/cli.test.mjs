@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 import {
   countMarker,
+  createTempDirectory,
   createTempRepo,
+  installFakeAntigravityCli,
   installFakeCodeGraph,
   projectRoot,
   readJson,
@@ -234,4 +237,123 @@ test("CodeGraph setup wiring uses the official project-local command", (t) => {
   assert.equal(result.status, 0, result.stderr);
   const calls = fs.readFileSync(fake.logPath, "utf8").split(/\r?\n/).filter(Boolean);
   assert.ok(calls.some((line) => line.trim() === "install --target=auto --location=local --yes"), calls.join("\n"));
+});
+
+test("configured agy-codex preset becomes the default for new repositories", (t) => {
+  const repo = createTempRepo(t);
+  const vorthHome = createTempDirectory(t, "vorth-home");
+  const env = { VORTH_HOME: vorthHome };
+
+  let result = runCli(["configure", "--preset", "agy-codex", "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  result = runCli(["init", "--repo", repo, "--codegraph", "disabled", "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+
+  const config = readJson(path.join(repo, ".vorth", "vorth.config.json"));
+  assert.equal(config.schemaVersion, 2);
+  assert.equal(config.preset, "agy-codex");
+  assert.equal(config.bridge, "enabled");
+  assert.equal(config.bridgeProfile, "worker");
+  assert.equal(config.eccAntigravity, "minimal");
+  assert.equal(config.eccCodex, "minimal");
+});
+
+test("repair JSON produces a declarative plan without applying external changes", (t) => {
+  const repo = createTempRepo(t);
+  const vorthHome = createTempDirectory(t, "vorth-home");
+  const env = { VORTH_HOME: vorthHome };
+  let result = runCli(["init", "--repo", repo, "--preset", "agy-codex", "--codegraph", "disabled", "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+
+  result = runCli(["repair", "--repo", repo, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.status, "approval_required");
+  assert.ok(output.plan.some((item) => item.stack === "superpowers"));
+  assert.ok(output.plan.some((item) => item.stack === "ecc"));
+  assert.ok(output.plan.some((item) => item.stack === "bridge"));
+  assert.equal(fs.existsSync(path.join(vorthHome, "bridge", "server.mjs")), false);
+});
+
+test("doctor does not report Git hygiene as broken outside a Git repository", (t) => {
+  const directory = createTempDirectory(t, "plain-project");
+  const disabled = [
+    "--superpowers", "disabled", "--ecc-antigravity", "disabled", "--ecc-codex", "disabled",
+    "--codegraph", "disabled", "--impeccable", "disabled", "--layers", "disabled",
+    "--ponytail", "disabled", "--rtk", "disabled", "--caveman", "disabled", "--bridge", "disabled"
+  ];
+  let result = runCli(["init", "--repo", directory, ...disabled, "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  result = runCli(["doctor", "--repo", directory, "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.equal(output.status, "healthy");
+  assert.equal(output.readiness.status, "ready");
+  assert.equal(output.issues.some((issue) => issue.code === "git_hygiene_missing"), false);
+});
+
+test("approved init installs one stable bridge router and initializes its worker profile", (t) => {
+  const repo = createTempRepo(t);
+  const vorthHome = createTempDirectory(t, "vorth-home");
+  const mcpConfig = path.join(vorthHome, "mcp_config.json");
+  const fakeAgy = installFakeAntigravityCli(t);
+  const env = {
+    VORTH_HOME: vorthHome,
+    VORTH_AGY_MCP_CONFIG: mcpConfig,
+    ANTIGRAVITY_IDE_CLI: fakeAgy.cliPath
+  };
+  const disabled = [
+    "--superpowers", "disabled", "--ecc-antigravity", "disabled", "--ecc-codex", "disabled",
+    "--codegraph", "disabled", "--impeccable", "disabled", "--layers", "disabled",
+    "--ponytail", "disabled", "--rtk", "disabled", "--caveman", "disabled"
+  ];
+  let result = runCli([
+    "init", "--repo", repo, "--bridge", "enabled", ...disabled,
+    "--yes", "--allow-native", "--json"
+  ], { env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).results.find((item) => item.stack === "bridge").status, "installed");
+
+  const stableServer = path.join(vorthHome, "bridge", "server.mjs");
+  assert.equal(fs.existsSync(stableServer), true);
+  assert.equal(fs.existsSync(path.join(vorthHome, "bridge", "profile-manager.mjs")), true);
+  const state = readJson(path.join(vorthHome, "bridge-state.json"));
+  assert.notEqual(state.httpsPort, state.lspPort);
+  const registrationCall = fs.readFileSync(fakeAgy.logPath, "utf8");
+  assert.match(registrationCall, /--add-mcp/);
+  assert.match(registrationCall, /"name":"vorth-agy-native-bridge"/);
+
+  fs.writeFileSync(mcpConfig, JSON.stringify({
+    mcpServers: { "vorth-agy-native-bridge": { command: process.execPath, args: [stableServer] } }
+  }), "utf8");
+  result = runCli(["status", "--repo", repo, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const status = JSON.parse(result.stdout);
+  assert.equal(status.agyNativeBridge.files, "present");
+  assert.equal(status.agyNativeBridge.version.status, "current");
+  assert.equal(status.agyNativeBridge.workerProfile.status, "initialized");
+  assert.equal(status.agyNativeBridge.health, "configured-unprobed");
+  assert.equal(status.readiness.status, "needs_attention");
+
+  result = runCli(["doctor", "--repo", repo, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "needs_attention");
+
+  result = runCli(["doctor", "--repo", repo, "--probe", "--json"], { env, timeout: 60000 });
+  assert.equal(result.status, 2, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "unhealthy");
+});
+
+test("Windows installer creates the short command without changing PATH in QA", (t) => {
+  if (process.platform !== "win32") return t.skip("Windows installer test");
+  const installDir = createTempDirectory(t, "cli-bin");
+  const vorthHome = createTempDirectory(t, "vorth-home");
+  const script = path.join(projectRoot, "scripts", "install.ps1");
+  const result = spawnSync("powershell.exe", [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
+    "-Preset", "agy-codex", "-InstallDir", installDir, "-SkipPath"
+  ], { encoding: "utf8", env: { ...process.env, VORTH_HOME: vorthHome } });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(path.join(installDir, "vorth.cmd")), true);
+  assert.equal(readJson(path.join(vorthHome, "config.json")).preset, "agy-codex");
 });

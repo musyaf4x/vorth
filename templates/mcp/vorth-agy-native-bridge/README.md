@@ -1,6 +1,6 @@
 # Vorth Agy Native Bridge
 
-Project-local MCP server for Vorth's Antigravity-only native OAuth delegation.
+Stable user-local MCP server for Vorth's Antigravity-only native OAuth delegation.
 
 ## Tools
 
@@ -12,10 +12,10 @@ Project-local MCP server for Vorth's Antigravity-only native OAuth delegation.
 
 ## Self Test
 
-Run this after copying the template into a Vorth-enabled project:
+Run this after `vorth repair` installs the stable router:
 
 ```powershell
-node .\.vorth\mcp\vorth-agy-native-bridge\server.mjs --self-test
+node $HOME\.vorth\bridge\server.mjs --self-test
 ```
 
 The test prints safe readiness/model metadata only. It does not call the user-status RPC and must not print Antigravity command lines, CSRF tokens, OAuth tokens, or cookies.
@@ -28,7 +28,8 @@ returned to the main agent.
 
 ## MCP Registration
 
-Prefer project-local MCP registration when Antigravity supports it. If only user-level registration is available, ask before editing `~/.gemini/config/mcp_config.json`.
+Vorth uses Antigravity IDE's `--add-mcp` command after explicit harness approval.
+The stable path avoids a registration that silently points to an old project.
 
 Suggested entry:
 
@@ -37,7 +38,7 @@ Suggested entry:
   "mcpServers": {
     "vorth-agy-native-bridge": {
       "command": "node",
-      "args": ["<repo>/.vorth/mcp/vorth-agy-native-bridge/server.mjs"]
+      "args": ["<home>/.vorth/bridge/server.mjs"]
     }
   }
 }
@@ -45,15 +46,16 @@ Suggested entry:
 
 ## Worker Profile
 
-Use a worker profile only after the active-profile bridge works.
+Initialize and authenticate the dedicated worker through the Vorth CLI:
 
 ```powershell
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs init
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs login --workspace .
-node .\.vorth\mcp\vorth-agy-native-bridge\profile-manager.mjs status
+vorth bridge init --repo .
+vorth bridge login --repo .
+vorth bridge status
 ```
 
-The helper defaults to OS temporary directories and discovers the Antigravity IDE
-CLI from `ANTIGRAVITY_IDE_CLI`, its standard LocalAppData location, or `PATH`.
-The worker must be logged in interactively once; readiness requires a language
-server exposing both HTTPS and CSRF runtime arguments.
+The helper persists data in `~/.vorth/agy-worker`, configures fixed runtime ports,
+and discovers the Antigravity IDE CLI from `ANTIGRAVITY_IDE_CLI`, its standard
+LocalAppData location, or `PATH`. The worker must be logged in interactively once;
+readiness requires a language server exposing both HTTPS and CSRF runtime
+arguments. The state file contains paths and ports only, never OAuth or CSRF data.
