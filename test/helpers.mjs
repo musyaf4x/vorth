@@ -65,6 +65,34 @@ export function installFakeCodeGraph(t) {
   };
 }
 
+export function installFakeAgyCli(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-agy-cli-"));
+  const binDir = path.join(root, "bin with spaces");
+  fs.mkdirSync(binDir);
+  const logPath = path.join(root, "agy.log");
+  const shimPath = path.join(binDir, process.platform === "win32" ? "agy.cmd" : "agy");
+  const shim = process.platform === "win32"
+    ? [
+        "@echo off",
+        `echo %*>>\"${logPath}\"`,
+        "if \"%1\"==\"--version\" echo 1.0.7",
+        "exit /b 0"
+      ].join("\r\n")
+    : [
+        "#!/bin/sh",
+        `printf '%s\\n' \"$*\" >> '${logPath.replaceAll("'", "'\\''")}'`,
+        "if [ \"$1\" = \"--version\" ]; then echo 1.0.7; fi",
+        "exit 0"
+      ].join("\n");
+  fs.writeFileSync(shimPath, shim, "utf8");
+  if (process.platform !== "win32") fs.chmodSync(shimPath, 0o755);
+  t.after(() => safeRemoveTemp(root));
+  return {
+    env: { PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}` },
+    logPath
+  };
+}
+
 export function installFakeAntigravityCli(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-agy-bin-"));
   const logPath = path.join(root, "antigravity.log");

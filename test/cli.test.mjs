@@ -8,6 +8,7 @@ import {
   countMarker,
   createTempDirectory,
   createTempRepo,
+  installFakeAgyCli,
   installFakeAntigravityCli,
   installFakeCodeGraph,
   projectRoot,
@@ -214,6 +215,48 @@ test("dry-run and setup approval checks do not perform external installation", (
   assert.equal(output.results[0].status, "approval_required");
 });
 
+test("Superpowers uses the official agy plugin command and detects its global plugin path", (t) => {
+  const repo = createTempRepo(t);
+  const home = createTempDirectory(t, "agy-home");
+  const fake = installFakeAgyCli(t);
+  const env = {
+    ...fake.env,
+    HOME: home,
+    USERPROFILE: home,
+    CODEX_HOME: path.join(home, ".codex")
+  };
+  const disabled = [
+    "--ecc-antigravity", "disabled", "--ecc-codex", "disabled", "--codegraph", "disabled",
+    "--impeccable", "disabled", "--layers", "disabled", "--ponytail", "disabled",
+    "--rtk", "disabled", "--caveman", "disabled", "--bridge", "disabled"
+  ];
+  let result = runCli(["init", "--repo", repo, ...disabled, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+
+  result = runCli([
+    "setup", "--repo", repo, "--stack", "superpowers", "--target", "agy",
+    "--allow-native", "--confirm", "--json"
+  ], { env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "approval_required");
+
+  result = runCli([
+    "setup", "--repo", repo, "--stack", "superpowers", "--target", "agy",
+    "--allow-network", "--allow-native", "--confirm", "--json"
+  ], { env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).results[0].status, "installed");
+  const calls = fs.readFileSync(fake.logPath, "utf8").split(/\r?\n/).filter(Boolean);
+  assert.ok(calls.some((line) => line.trim() === "plugin install https://github.com/obra/superpowers"), calls.join("\n"));
+
+  fs.mkdirSync(path.join(home, ".gemini", "config", "plugins", "superpowers"), { recursive: true });
+  result = runCli(["status", "--repo", repo, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const status = JSON.parse(result.stdout);
+  assert.equal(status.superpowers.providers.agyPlugin, true);
+  assert.equal(status.superpowers.health, "healthy");
+});
+
 test("ECC Codex setup uses the official minimal target with native approval", { skip: process.platform !== "win32" }, (t) => {
   const repo = createTempRepo(t);
   const home = createTempDirectory(t, "ecc-home");
@@ -338,6 +381,9 @@ test("repair JSON produces a declarative plan without applying external changes"
   const output = JSON.parse(result.stdout);
   assert.equal(output.status, "approval_required");
   assert.ok(output.plan.some((item) => item.stack === "superpowers"));
+  if (process.platform === "win32") {
+    assert.equal(output.plan.find((item) => item.stack === "superpowers" && item.target === "agy").fixable, true);
+  }
   assert.ok(output.plan.some((item) => item.stack === "ecc"));
   assert.ok(output.plan.some((item) => item.stack === "bridge"));
   assert.equal(fs.existsSync(path.join(vorthHome, "bridge", "server.mjs")), false);
