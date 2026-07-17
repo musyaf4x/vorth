@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const SERVER_INFO = { name: "vorth-agy-native-bridge", version: "0.3.0" };
+const SERVER_INFO = { name: "vorth-agy-native-bridge", version: "0.3.1" };
 const META = { ideName: "antigravity", extensionName: "antigravity", locale: "en" };
 const FLASH_HIGH_ID = "gemini-3-flash-agent";
 const FLASH_HIGH_DISPLAY = "Gemini 3.5 Flash (High)";
@@ -131,7 +131,13 @@ if (isMain) {
     const workerArgs = withWorkerProfile({});
     const status = await toolStatus(workerArgs);
     const models = status.ready ? await toolModels(workerArgs) : null;
-    process.stdout.write(JSON.stringify({ status, flashHigh: models?.flashHigh ?? null }, null, 2));
+    process.stdout.write(JSON.stringify({
+      status,
+      modelStatus: models?.status ?? "not_checked",
+      modelError: models?.modelError ?? null,
+      flashHigh: models?.flashHigh ?? null,
+      models: models?.models ?? []
+    }, null, 2));
     process.stdout.write("\n");
   } else {
     startMcpServer();
@@ -312,11 +318,18 @@ async function toolStatus(args) {
 async function toolModels(args) {
   const selected = requireLanguageServer(args);
   const { models, defaultAgentModelId } = await getModels(selected);
-  const flashHigh = resolveModel("flash-high", models);
+  let flashHigh = null;
+  let modelError = null;
+  try {
+    flashHigh = resolveModel("flash-high", models);
+  } catch (error) {
+    modelError = error.message;
+  }
   return {
-    status: "ok",
+    status: flashHigh ? "ok" : "target_model_unavailable",
     defaultAgentModelId,
     flashHigh,
+    modelError,
     models: models.map((model) => ({
       id: model.id,
       displayName: model.displayName,

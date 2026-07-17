@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 export const projectRoot = path.resolve(testDir, "..");
 export const cliPath = path.join(projectRoot, "bin", "vorth.mjs");
+const defaultVorthHome = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-cli-home-"));
+process.once("exit", () => safeRemoveTemp(defaultVorthHome));
 
 export function createTempRepo(t, name = "repo") {
   const { parent, target: repo } = createTempTarget(t, name);
@@ -24,7 +26,7 @@ export function runCli(args, options = {}) {
     cwd: options.cwd || projectRoot,
     encoding: "utf8",
     timeout: options.timeout || 30000,
-    env: { ...process.env, ...options.env }
+    env: { ...process.env, VORTH_HOME: defaultVorthHome, ...options.env }
   });
 }
 
@@ -33,8 +35,10 @@ export function readJson(filePath) {
 }
 
 export function installFakeCodeGraph(t) {
-  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-bin-"));
-  const logPath = path.join(binDir, "codegraph.log");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-bin-"));
+  const binDir = path.join(root, "bin with spaces");
+  fs.mkdirSync(binDir);
+  const logPath = path.join(root, "codegraph.log");
   const shimPath = path.join(binDir, process.platform === "win32" ? "codegraph.cmd" : "codegraph");
   const shim = process.platform === "win32"
     ? [
@@ -52,8 +56,9 @@ export function installFakeCodeGraph(t) {
         "if [ \"$1\" = \"init\" ]; then mkdir -p .codegraph; fi"
       ].join("\n");
   fs.writeFileSync(shimPath, shim, "utf8");
-  if (process.platform !== "win32") fs.chmodSync(shimPath, 0o755);
-  t.after(() => safeRemoveTemp(binDir));
+  if (process.platform === "win32") fs.writeFileSync(path.join(binDir, "codegraph"), "npm shell shim", "utf8");
+  else fs.chmodSync(shimPath, 0o755);
+  t.after(() => safeRemoveTemp(root));
   return {
     env: { PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}` },
     logPath
@@ -61,15 +66,32 @@ export function installFakeCodeGraph(t) {
 }
 
 export function installFakeAntigravityCli(t) {
-  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-agy-bin-"));
-  const logPath = path.join(binDir, "antigravity.log");
-  const shimPath = path.join(binDir, process.platform === "win32" ? "antigravity-ide.cmd" : "antigravity-ide");
-  const shim = process.platform === "win32"
-    ? ["@echo off", `echo %*>>\"${logPath}\"`, "exit /b 0"].join("\r\n")
-    : ["#!/bin/sh", `printf '%s\\n' \"$*\" >> '${logPath.replaceAll("'", "'\\''")}'`, "exit 0"].join("\n");
-  fs.writeFileSync(shimPath, shim, "utf8");
-  if (process.platform !== "win32") fs.chmodSync(shimPath, 0o755);
-  t.after(() => safeRemoveTemp(binDir));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-agy-bin-"));
+  const logPath = path.join(root, "antigravity.log");
+  let shimPath;
+  if (process.platform === "win32") {
+    const binDir = path.join(root, "bin");
+    const cliDir = path.join(root, "resources", "app", "out");
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.mkdirSync(cliDir, { recursive: true });
+    const executable = path.join(root, "Antigravity IDE.exe");
+    try {
+      fs.linkSync(process.execPath, executable);
+    } catch {
+      fs.copyFileSync(process.execPath, executable);
+    }
+    fs.writeFileSync(path.join(cliDir, "cli.js"), [
+      'const fs = require("node:fs");',
+      `fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)) + "\\n");`
+    ].join("\n"), "utf8");
+    shimPath = path.join(binDir, "antigravity-ide.cmd");
+    fs.writeFileSync(shimPath, "@echo off\r\nexit /b 0\r\n", "utf8");
+  } else {
+    shimPath = path.join(root, "antigravity-ide");
+    fs.writeFileSync(shimPath, ["#!/bin/sh", `printf '%s\\n' \"$*\" >> '${logPath.replaceAll("'", "'\\''")}'`, "exit 0"].join("\n"), "utf8");
+    fs.chmodSync(shimPath, 0o755);
+  }
+  t.after(() => safeRemoveTemp(root));
   return { cliPath: shimPath, logPath };
 }
 

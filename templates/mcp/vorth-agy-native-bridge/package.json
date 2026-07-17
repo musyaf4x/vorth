@@ -1,6 +1,6 @@
 {
   "name": "vorth-agy-native-bridge",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "Stable Vorth MCP bridge for Antigravity native OAuth cascade delegation.",

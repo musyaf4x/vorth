@@ -214,6 +214,56 @@ test("dry-run and setup approval checks do not perform external installation", (
   assert.equal(output.results[0].status, "approval_required");
 });
 
+test("ECC Codex setup uses the official minimal target with native approval", { skip: process.platform !== "win32" }, (t) => {
+  const repo = createTempRepo(t);
+  const home = createTempDirectory(t, "ecc-home");
+  const codexHome = path.join(home, ".codex");
+  const env = { HOME: home, CODEX_HOME: codexHome };
+  const disabled = [
+    "--superpowers", "disabled", "--ecc-antigravity", "disabled",
+    "--codegraph", "disabled", "--impeccable", "disabled", "--layers", "disabled",
+    "--ponytail", "disabled", "--rtk", "disabled", "--caveman", "disabled", "--bridge", "disabled"
+  ];
+  let result = runCli(["init", "--repo", repo, "--preset", "agy-codex", ...disabled, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+
+  const vendor = path.join(repo, ".vorth", "vendor", "everything-claude-code");
+  fs.mkdirSync(vendor, { recursive: true });
+  fs.writeFileSync(path.join(vendor, "install.ps1"), [
+    "$isDryRun = $args -contains '--dry-run'",
+    "Write-Output ($args -join ' ')",
+    "if (-not $isDryRun) {",
+    "  $root = Join-Path $env:HOME '.codex'",
+    "  New-Item -ItemType Directory -Force -Path $root | Out-Null",
+    "  Set-Content -LiteralPath (Join-Path $root 'ecc-install-state.json') -Value '{}'",
+    "}"
+  ].join("\n"), "utf8");
+
+  result = runCli([
+    "setup", "--repo", repo, "--stack", "ecc", "--target", "codex",
+    "--allow-network", "--confirm", "--json"
+  ], { env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "approval_required");
+
+  result = runCli([
+    "setup", "--repo", repo, "--stack", "ecc", "--target", "codex",
+    "--allow-network", "--allow-native", "--confirm", "--json"
+  ], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const setup = JSON.parse(result.stdout);
+  assert.equal(setup.status, "ok");
+  assert.equal(setup.results[0].status, "installed");
+  assert.match(setup.results[0].preview.output, /--profile minimal --target codex --dry-run/);
+  assert.match(setup.results[0].output, /--profile minimal --target codex/);
+
+  result = runCli(["status", "--repo", repo, "--json"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const status = JSON.parse(result.stdout);
+  assert.equal(status.ecc.codex.health, "healthy");
+  assert.equal(status.ecc.codex.installState, true);
+});
+
 test("doctor and argument validation return machine-readable nonzero errors", (t) => {
   const repo = createTempRepo(t);
   let result = runCli(["doctor", "--repo", repo, "--json"]);
@@ -237,6 +287,24 @@ test("CodeGraph setup wiring uses the official project-local command", (t) => {
   assert.equal(result.status, 0, result.stderr);
   const calls = fs.readFileSync(fake.logPath, "utf8").split(/\r?\n/).filter(Boolean);
   assert.ok(calls.some((line) => line.trim() === "install --target=auto --location=local --yes"), calls.join("\n"));
+});
+
+test("agy-codex CodeGraph wiring requires native approval and targets both harnesses", (t) => {
+  const repo = createTempRepo(t);
+  const fake = installFakeCodeGraph(t);
+  let result = runCli(["init", "--repo", repo, "--preset", "agy-codex", "--bridge", "disabled", "--json"], { env: fake.env });
+  assert.equal(result.status, 0, result.stderr);
+
+  result = runCli(["setup", "--repo", repo, "--stack", "codegraph", "--wire", "--confirm", "--json"], { env: fake.env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).status, "approval_required");
+
+  result = runCli([
+    "setup", "--repo", repo, "--stack", "codegraph", "--wire", "--confirm", "--allow-native", "--json"
+  ], { env: fake.env });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = fs.readFileSync(fake.logPath, "utf8").split(/\r?\n/).filter(Boolean);
+  assert.ok(calls.some((line) => line.trim() === "install --target=antigravity,codex --location=global --yes"), calls.join("\n"));
 });
 
 test("configured agy-codex preset becomes the default for new repositories", (t) => {
@@ -295,11 +363,12 @@ test("doctor does not report Git hygiene as broken outside a Git repository", (t
 test("approved init installs one stable bridge router and initializes its worker profile", (t) => {
   const repo = createTempRepo(t);
   const vorthHome = createTempDirectory(t, "vorth-home");
-  const mcpConfig = path.join(vorthHome, "mcp_config.json");
+  const appData = createTempDirectory(t, "app-data");
+  const mcpConfig = path.join(appData, "Antigravity IDE", "User", "mcp.json");
   const fakeAgy = installFakeAntigravityCli(t);
   const env = {
     VORTH_HOME: vorthHome,
-    VORTH_AGY_MCP_CONFIG: mcpConfig,
+    APPDATA: appData,
     ANTIGRAVITY_IDE_CLI: fakeAgy.cliPath
   };
   const disabled = [
@@ -319,12 +388,19 @@ test("approved init installs one stable bridge router and initializes its worker
   assert.equal(fs.existsSync(path.join(vorthHome, "bridge", "profile-manager.mjs")), true);
   const state = readJson(path.join(vorthHome, "bridge-state.json"));
   assert.notEqual(state.httpsPort, state.lspPort);
-  const registrationCall = fs.readFileSync(fakeAgy.logPath, "utf8");
-  assert.match(registrationCall, /--add-mcp/);
-  assert.match(registrationCall, /"name":"vorth-agy-native-bridge"/);
+  const registrationCall = fs.readFileSync(fakeAgy.logPath, "utf8").trim();
+  if (process.platform === "win32") {
+    const args = JSON.parse(registrationCall);
+    assert.equal(args[0], "--add-mcp");
+    assert.equal(JSON.parse(args[1]).name, "vorth-agy-native-bridge");
+  } else {
+    assert.match(registrationCall, /--add-mcp/);
+    assert.match(registrationCall, /vorth-agy-native-bridge/);
+  }
 
+  fs.mkdirSync(path.dirname(mcpConfig), { recursive: true });
   fs.writeFileSync(mcpConfig, JSON.stringify({
-    mcpServers: { "vorth-agy-native-bridge": { command: process.execPath, args: [stableServer] } }
+    servers: { "vorth-agy-native-bridge": { command: process.execPath, args: [stableServer] } }
   }), "utf8");
   result = runCli(["status", "--repo", repo, "--json"], { env });
   assert.equal(result.status, 0, result.stderr);
@@ -332,6 +408,7 @@ test("approved init installs one stable bridge router and initializes its worker
   assert.equal(status.agyNativeBridge.files, "present");
   assert.equal(status.agyNativeBridge.version.status, "current");
   assert.equal(status.agyNativeBridge.workerProfile.status, "initialized");
+  assert.equal(status.agyNativeBridge.mcpRegistration.configPath, mcpConfig);
   assert.equal(status.agyNativeBridge.health, "configured-unprobed");
   assert.equal(status.readiness.status, "needs_attention");
 

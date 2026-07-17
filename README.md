@@ -138,9 +138,9 @@ need `--allow-network --confirm`; harness/global changes need
 
 | Stack | Vorth adapter |
 | --- | --- |
-| CodeGraph | Installs `@colbymchenry/codegraph` globally only after approval, runs `codegraph init`, then optional local agent wiring |
+| CodeGraph | Installs `@colbymchenry/codegraph` globally only after approval, runs `codegraph init`, then wires `antigravity,codex` globally for the `agy-codex` preset |
 | Superpowers | Antigravity CLI plugin when available; Codex installation remains its official `/plugins` flow |
-| ECC | Clones `affaan-m/everything-claude-code`, previews, then runs minimal `--target antigravity` install |
+| ECC | Clones `affaan-m/everything-claude-code`, previews, then installs the minimal profile for project-local Antigravity or approved Codex home |
 | Impeccable | `npx --yes impeccable install --providers=gemini,codex --scope=project` |
 | Layers | Depth-1 project-local checkout of `jamiemill/layers-skills` with revision detection |
 | Ponytail | Official `agy plugin install` or Codex plugin commands; both are harness-level |
