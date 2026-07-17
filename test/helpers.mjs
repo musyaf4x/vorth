@@ -8,7 +8,9 @@ const testDir = path.dirname(fileURLToPath(import.meta.url));
 export const projectRoot = path.resolve(testDir, "..");
 export const cliPath = path.join(projectRoot, "bin", "vorth.mjs");
 const defaultVorthHome = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-cli-home-"));
+const defaultUserHome = fs.mkdtempSync(path.join(os.tmpdir(), "vorth-user-home-"));
 process.once("exit", () => safeRemoveTemp(defaultVorthHome));
+process.once("exit", () => safeRemoveTemp(defaultUserHome));
 
 export function createTempRepo(t, name = "repo") {
   const { parent, target: repo } = createTempTarget(t, name);
@@ -26,7 +28,16 @@ export function runCli(args, options = {}) {
     cwd: options.cwd || projectRoot,
     encoding: "utf8",
     timeout: options.timeout || 30000,
-    env: { ...process.env, VORTH_HOME: defaultVorthHome, ...options.env }
+    env: {
+      ...process.env,
+      VORTH_HOME: defaultVorthHome,
+      HOME: defaultUserHome,
+      USERPROFILE: defaultUserHome,
+      CODEX_HOME: path.join(defaultUserHome, ".codex"),
+      APPDATA: path.join(defaultUserHome, "AppData", "Roaming"),
+      LOCALAPPDATA: path.join(defaultUserHome, "AppData", "Local"),
+      ...options.env
+    }
   });
 }
 
